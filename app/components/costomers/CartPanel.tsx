@@ -40,10 +40,10 @@ export default function CartPanel({ cart, total, placing, onChangeQty, onPlaceOr
               >
                 −
               </button>
-              <span className="w-5 text-center text-sm font-black text-slate-100">{c.qty}</span>
+              <span className="w-8 text-center text-sm font-black text-slate-100">{c.qty}</span>
               <button
                 onClick={() => onChangeQty(c.menuItem.id, 1)}
-                className="h-11 w-11 rounded-full border border-cyan-300/45 text-xl font-bold text-cyan-200"
+                className="h-[3.25rem] w-[3.25rem] rounded-full border border-cyan-300/45 text-2xl font-bold text-cyan-200"
               >
                 +
               </button>
@@ -58,13 +58,15 @@ export default function CartPanel({ cart, total, placing, onChangeQty, onPlaceOr
           <span className="text-2xl font-black text-white">¥{total.toLocaleString()}</span>
         </div>
 
-        <button
-          onClick={onPlaceOrder}
-          disabled={placing}
-          className="neon-button w-full rounded-2xl px-4 py-5 text-lg font-black transition-all disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {placing ? "注文送信中..." : "カートを注文する"}
-        </button>
+        <div className="flex justify-center">
+          <button
+            onClick={onPlaceOrder}
+            disabled={placing}
+            className="neon-button inline-flex min-w-[13rem] max-w-full items-center justify-center rounded-full px-8 py-[1.05rem] text-lg font-black transition-all disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {placing ? "注文送信中..." : "注文する"}
+          </button>
+        </div>
       </div>
     </div>
   );
