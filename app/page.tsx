@@ -19,6 +19,12 @@ export default function Home() {
           🗂️ 管理者画面
         </Link>
         <Link
+          href="/cashier"
+          className="block text-center bg-amber-600 text-white rounded-xl py-5 font-medium text-lg hover:bg-amber-700 transition"
+        >
+          💵 レジ画面
+        </Link>
+        <Link
           href="/display"
           className="block text-center bg-gray-700 text-white rounded-xl py-5 font-medium text-lg hover:bg-gray-800 transition"
         >

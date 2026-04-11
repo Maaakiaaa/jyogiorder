@@ -13,10 +13,22 @@ export interface CartItem {
   qty: number;
 }
 
+export interface QrCartItem {
+  menuId: number;
+  qty: number;
+}
+
+export interface QrOrderPayload {
+  version: 1;
+  checkoutToken: string;
+  items: QrCartItem[];
+}
+
 export interface OrderItem {
   name: string;
   qty: number;
   price: number;
+  checkoutToken?: string;
 }
 
 export interface Order {

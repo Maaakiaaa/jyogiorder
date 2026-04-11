@@ -1,17 +1,21 @@
-﻿"use client";
+"use client";
 
-import { useState, useEffect, useCallback } from "react";
-import MenuPanel from "@/app/components/costomers/MenuPanel";
+import { useCallback, useEffect, useState } from "react";
+import type { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 import CartPanel from "@/app/components/costomers/CartPanel";
+import CheckoutPanel from "@/app/components/costomers/CheckoutPanel";
+import MenuPanel from "@/app/components/costomers/MenuPanel";
 import WaitingPanel from "@/app/components/costomers/WaitingPanel";
 import WelcomePanel from "@/app/components/costomers/WelcomePanel";
-import { CartItem, Order, MenuItem } from "@/types";
-import { createOrder } from "@/lib/orders";
 import { fetchMenuItems } from "@/lib/menu";
+import { createOrder, getOrderCheckoutToken } from "@/lib/orders";
+import { createCheckoutToken } from "@/lib/qr";
 import { supabase } from "@/lib/supabase";
+import { CartItem, MenuItem, Order } from "@/types";
 
-type CustomerStep = "menu" | "waiting" | "welcome";
+type CustomerStep = "menu" | "checkout" | "waiting" | "welcome";
 type TabType = "menu" | "cart";
+type OrderInsertPayload = RealtimePostgresInsertPayload<Order & Record<string, unknown>>;
 
 export default function CustomerPage() {
   const [step, setStep] = useState<CustomerStep>("menu");
@@ -19,10 +23,11 @@ export default function CustomerPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [checkoutToken, setCheckoutToken] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
   const [menu, setMenu] = useState<MenuItem[]>([]);
 
-  const cartTotal = cart.reduce((s, i) => s + i.menuItem.price * i.qty, 0);
+  const cartTotal = cart.reduce((sum, item) => sum + item.menuItem.price * item.qty, 0);
 
   const loadMenu = useCallback(async () => {
     try {
@@ -45,32 +50,71 @@ export default function CustomerPage() {
     };
   }, [loadMenu]);
 
+  useEffect(() => {
+    if (!checkoutToken) return;
+
+    const channel = supabase
+      .channel(`checkout-${checkoutToken}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "orders" },
+        (payload: OrderInsertPayload) => {
+          const insertedOrder = payload.new as Order;
+          if (getOrderCheckoutToken(insertedOrder.items) !== checkoutToken) return;
+
+          setOrders((prev) => (
+            prev.some((order) => order.id === insertedOrder.id) ? prev : [...prev, insertedOrder]
+          ));
+          setActiveOrderId(insertedOrder.id);
+          setCart([]);
+          setStep("waiting");
+          setActiveTab("menu");
+          setCheckoutToken(null);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [checkoutToken]);
+
   function changeQty(id: number, delta: number) {
     setCart((prev) => {
-      const existing = prev.find((c) => c.menuItem.id === id);
-      const menuItem = menu.find((m) => m.id === id)!;
+      const existing = prev.find((item) => item.menuItem.id === id);
+      const menuItem = menu.find((entry) => entry.id === id);
+      if (!menuItem) return prev;
+
       if (!existing) {
         if (delta <= 0) return prev;
         return [...prev, { menuItem, qty: 1 }];
       }
-      const newQty = existing.qty + delta;
-      if (newQty <= 0) return prev.filter((c) => c.menuItem.id !== id);
-      return prev.map((c) => (c.menuItem.id === id ? { ...c, qty: newQty } : c));
+
+      const nextQty = existing.qty + delta;
+      if (nextQty <= 0) {
+        return prev.filter((item) => item.menuItem.id !== id);
+      }
+
+      return prev.map((item) => (
+        item.menuItem.id === id ? { ...item, qty: nextQty } : item
+      ));
     });
   }
 
   async function handlePlaceOrder() {
     if (cart.length === 0 || placing) return;
+
     setPlacing(true);
     try {
-      const items = cart.map((c) => ({
-        name: c.menuItem.name,
-        qty: c.qty,
-        price: c.menuItem.price,
+      const items = cart.map((item) => ({
+        name: item.menuItem.name,
+        qty: item.qty,
+        price: item.menuItem.price,
       }));
       const newOrder = await createOrder(items);
       setOrders((prev) => [...prev, newOrder]);
       setActiveOrderId(newOrder.id);
+      setCheckoutToken(null);
       setCart([]);
       setStep("waiting");
       setActiveTab("menu");
@@ -81,8 +125,14 @@ export default function CustomerPage() {
     }
   }
 
+  function handleShowQr() {
+    if (cart.length === 0) return;
+    setCheckoutToken(createCheckoutToken());
+    setStep("checkout");
+  }
+
   function handleDone(doneOrderId: string) {
-    const remaining = orders.filter((o) => o.id !== doneOrderId);
+    const remaining = orders.filter((order) => order.id !== doneOrderId);
     setOrders(remaining);
 
     if (remaining.length === 0) {
@@ -101,9 +151,10 @@ export default function CustomerPage() {
     setActiveTab("menu");
     setOrders([]);
     setActiveOrderId(null);
+    setCheckoutToken(null);
   }
 
-  const activeOrder = activeOrderId ? orders.find((o) => o.id === activeOrderId) ?? null : null;
+  const activeOrder = activeOrderId ? orders.find((order) => order.id === activeOrderId) ?? null : null;
 
   if (step === "waiting" && activeOrder) {
     return (
@@ -117,18 +168,36 @@ export default function CustomerPage() {
       />
     );
   }
+
+  if (step === "checkout" && checkoutToken) {
+    return (
+      <CheckoutPanel
+        cart={cart}
+        total={cartTotal}
+        checkoutToken={checkoutToken}
+        onBack={() => {
+          setCheckoutToken(null);
+          setStep("menu");
+          setActiveTab("cart");
+        }}
+      />
+    );
+  }
+
   if (step === "welcome") {
     return <WelcomePanel onReset={handleReset} />;
   }
 
   return (
     <main className="festival-bg min-h-screen px-3 py-3">
-      <div className="relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md flex-col overflow-hidden rounded-[28px] glass-panel">
+      <div className="glass-panel relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md flex-col overflow-hidden rounded-[28px]">
         <header className="border-b border-cyan-300/30 px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-200/80 neon-title">TACHIBANASAI</p>
-              <h1 className="mt-2 text-2xl font-black neon-title">MOBA JYOGI</h1>
+              <p className="neon-title text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-200/80">
+                TACHIBANASAI
+              </p>
+              <h1 className="neon-title mt-2 text-2xl font-black">MOBA JYOGI</h1>
             </div>
           </div>
         </header>
@@ -139,7 +208,7 @@ export default function CustomerPage() {
           </div>
         </section>
 
-        <section className="flex-1 overflow-y-auto px-2 py-3 animate-slide-up">
+        <section className="animate-slide-up flex-1 overflow-y-auto px-2 py-3">
           {activeTab === "menu" ? (
             <MenuPanel menu={menu} cart={cart} onChangeQty={changeQty} />
           ) : (
@@ -149,6 +218,7 @@ export default function CustomerPage() {
               placing={placing}
               onChangeQty={changeQty}
               onPlaceOrder={handlePlaceOrder}
+              onShowQr={handleShowQr}
             />
           )}
         </section>
@@ -165,7 +235,9 @@ export default function CustomerPage() {
           <button
             onClick={() => setActiveTab("cart")}
             className={`rounded-xl px-2 py-[1.3rem] text-xs font-bold transition ${
-              activeTab === "cart" ? "neon-pill bg-fuchsia-400/10 text-fuchsia-100 glow-pink" : "text-slate-300"
+              activeTab === "cart"
+                ? "neon-pill bg-fuchsia-400/10 text-fuchsia-100 glow-pink"
+                : "text-slate-300"
             }`}
           >
             🛒 CART

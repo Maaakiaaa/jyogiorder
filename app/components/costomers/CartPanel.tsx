@@ -8,9 +8,10 @@ interface Props {
   placing: boolean;
   onChangeQty: (id: number, delta: number) => void;
   onPlaceOrder: () => void;
+  onShowQr: () => void;
 }
 
-export default function CartPanel({ cart, total, placing, onChangeQty, onPlaceOrder }: Props) {
+export default function CartPanel({ cart, total, placing, onChangeQty, onPlaceOrder, onShowQr }: Props) {
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-slate-300">
@@ -58,11 +59,17 @@ export default function CartPanel({ cart, total, placing, onChangeQty, onPlaceOr
           <span className="text-2xl font-black text-white">¥{total.toLocaleString()}</span>
         </div>
 
-        <div className="flex justify-center">
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onShowQr}
+            className="rounded-full border border-cyan-300/40 bg-cyan-300/12 px-4 py-[1.05rem] text-sm font-black text-cyan-100 transition-all"
+          >
+            レジ用QR
+          </button>
           <button
             onClick={onPlaceOrder}
             disabled={placing}
-            className="neon-button inline-flex min-w-[13rem] max-w-full items-center justify-center rounded-full px-8 py-[1.05rem] text-lg font-black transition-all disabled:cursor-not-allowed disabled:opacity-60"
+            className="neon-button inline-flex items-center justify-center rounded-full px-4 py-[1.05rem] text-sm font-black transition-all disabled:cursor-not-allowed disabled:opacity-60"
           >
             {placing ? "注文送信中..." : "注文する"}
           </button>
