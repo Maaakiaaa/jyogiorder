@@ -51,3 +51,14 @@ export async function fetchAllOrders(): Promise<Order[]> {
   if (error) throw error;
   return (data ?? []) as Order[];
 }
+
+// 販売集計用に全注文を取得する
+export async function fetchSalesOrders(): Promise<Order[]> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as Order[];
+}

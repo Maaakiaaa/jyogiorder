@@ -4,7 +4,7 @@ export interface MenuItem {
   id: number;
   name: string;
   price: number;
-  emoji: string;
+  emoji?: string;
   available: boolean;
 }
 

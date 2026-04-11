@@ -1,27 +1,62 @@
 ﻿"use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Order, OrderStatus, MenuItem } from "@/types";
-import { fetchAllOrders, updateOrderStatus } from "@/lib/orders";
-import { fetchMenuItems, updateMenuItem } from "@/lib/menu";
+import { fetchAllOrders, fetchSalesOrders, updateOrderStatus } from "@/lib/orders";
+import { createMenuItem, fetchMenuItems, updateMenuItem } from "@/lib/menu";
 import { supabase } from "@/lib/supabase";
 import OrderCard from "@/app/components/admin/OrderCard";
 
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "1234";
 
-type AdminTab = "orders" | "menu";
+type AdminTab = "orders" | "menu" | "sales";
+
+type ProductSales = {
+  name: string;
+  qty: number;
+  amount: number;
+};
+
+function getErrorMessage(error: unknown) {
+  if (typeof error === "string") return error;
+
+  if (error && typeof error === "object") {
+    const candidate = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+      code?: unknown;
+    };
+
+    const parts = [candidate.message, candidate.details, candidate.hint, candidate.code]
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+    if (parts.length > 0) return parts.join(" / ");
+  }
+
+  return "不明なエラー";
+}
 
 export default function AdminPage() {
+  const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previousSalesOrderIdsRef = useRef<Set<string>>(new Set());
+  const hasInitializedSalesRef = useRef(false);
   const [authed, setAuthed] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [salesOrders, setSalesOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [adminTab, setAdminTab] = useState<AdminTab>("orders");
   const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState<string>("");
   const [editingPrice, setEditingPrice] = useState<string>("");
+  const [newMenuName, setNewMenuName] = useState("");
+  const [newMenuPrice, setNewMenuPrice] = useState("");
+  const [isCreateMenuFormOpen, setIsCreateMenuFormOpen] = useState(false);
+  const [isCreatingMenuItem, setIsCreatingMenuItem] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -49,15 +84,88 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try {
-      const [ordersData, menuData] = await Promise.all([fetchAllOrders(), fetchMenuItems()]);
+      const [ordersData, menuData, salesOrderData] = await Promise.all([fetchAllOrders(), fetchMenuItems(), fetchSalesOrders()]);
       setOrders(ordersData);
       setMenu(menuData);
+      setSalesOrders(salesOrderData);
     } catch {
       // silent
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const productSales = useMemo<ProductSales[]>(() => {
+    const salesMap = new Map<string, ProductSales>();
+
+    for (const item of menu) {
+      salesMap.set(item.name, { name: item.name, qty: 0, amount: 0 });
+    }
+
+    for (const order of salesOrders) {
+      for (const item of order.items) {
+        const current = salesMap.get(item.name) ?? { name: item.name, qty: 0, amount: 0 };
+        current.qty += item.qty;
+        current.amount += item.qty * item.price;
+        salesMap.set(item.name, current);
+      }
+    }
+
+    return Array.from(salesMap.values()).sort((a, b) => b.qty - a.qty || b.amount - a.amount || a.name.localeCompare(b.name, "ja"));
+  }, [menu, salesOrders]);
+
+  const totalSoldCount = useMemo(
+    () => productSales.reduce((sum, item) => sum + item.qty, 0),
+    [productSales]
+  );
+
+  const totalSalesAmount = useMemo(
+    () => productSales.reduce((sum, item) => sum + item.amount, 0),
+    [productSales]
+  );
+
+  useEffect(() => {
+    if (!authed) return;
+
+    notificationAudioRef.current = new Audio("/Bell.mp3");
+    notificationAudioRef.current.preload = "auto";
+
+    return () => {
+      notificationAudioRef.current = null;
+    };
+  }, [authed]);
+
+  useEffect(() => {
+    if (!authed || loading) return;
+
+    const currentIds = new Set(salesOrders.map((order) => order.id));
+
+    if (!hasInitializedSalesRef.current) {
+      previousSalesOrderIdsRef.current = currentIds;
+      hasInitializedSalesRef.current = true;
+      return;
+    }
+
+    const hasNewOrder = salesOrders.some((order) => !previousSalesOrderIdsRef.current.has(order.id));
+    previousSalesOrderIdsRef.current = currentIds;
+
+    if (!hasNewOrder) return;
+
+    const audio = notificationAudioRef.current;
+    if (!audio) return;
+
+    audio.currentTime = 0;
+    void audio.play().catch(() => {
+      // Browser autoplay policies may block playback until the user interacts.
+    });
+  }, [authed, loading, salesOrders]);
+
+  useEffect(() => {
+    if (authed) return;
+
+    previousSalesOrderIdsRef.current = new Set();
+    hasInitializedSalesRef.current = false;
+  }, [authed]);
 
   useEffect(() => {
     if (!authed) return;
@@ -94,25 +202,65 @@ export default function AdminPage() {
   }
 
   async function handleMenuUpdate(menuId: number) {
+    const newName = editingName.trim();
     const newPrice = parseInt(editingPrice, 10);
-    if (isNaN(newPrice)) return;
+    if (!newName || isNaN(newPrice)) return;
 
     try {
-      await updateMenuItem(menuId, { price: newPrice });
-      setEditingMenuId(null);
-      setEditingPrice("");
+      await updateMenuItem(menuId, { name: newName, price: newPrice });
+      clearMenuEditing();
       await load();
-    } catch {
-      alert("更新に失敗しました");
+    } catch (error) {
+      alert(`更新に失敗しました: ${getErrorMessage(error)}`);
     }
+  }
+
+  async function handleCreateMenuItem() {
+    const name = newMenuName.trim();
+    const price = parseInt(newMenuPrice, 10);
+
+    if (!name || isNaN(price)) {
+      alert("商品名・価格を入力してください");
+      return;
+    }
+
+    setIsCreatingMenuItem(true);
+    try {
+      await createMenuItem({
+        name,
+        price,
+        available: true,
+      });
+      setNewMenuName("");
+      setNewMenuPrice("");
+      setIsCreateMenuFormOpen(false);
+      await load();
+    } catch (error) {
+      console.error("Create menu item error:", error);
+      alert(`追加に失敗しました: ${getErrorMessage(error)}`);
+    } finally {
+      setIsCreatingMenuItem(false);
+    }
+  }
+
+  function startMenuEditing(item: MenuItem) {
+    setEditingMenuId(item.id);
+    setEditingName(item.name);
+    setEditingPrice(item.price.toString());
+  }
+
+  function clearMenuEditing() {
+    setEditingMenuId(null);
+    setEditingName("");
+    setEditingPrice("");
   }
 
   async function handleAvailableToggle(menuId: number, currentAvailable: boolean) {
     try {
       await updateMenuItem(menuId, { available: !currentAvailable });
       await load();
-    } catch {
-      alert("更新に失敗しました");
+    } catch (error) {
+      alert(`更新に失敗しました: ${getErrorMessage(error)}`);
     }
   }
 
@@ -179,6 +327,16 @@ export default function AdminPage() {
             >
               ⚙️ 商品管理
             </button>
+            <button
+              onClick={() => setAdminTab("sales")}
+              className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
+                adminTab === "sales"
+                  ? "border-yellow-300/40 bg-yellow-300/15 text-yellow-100"
+                  : "border-slate-300/30 text-slate-300"
+              }`}
+            >
+              📈 販売実績
+            </button>
             <button onClick={handleLogout} className="rounded-xl border border-fuchsia-300/40 px-3 py-2 text-sm font-bold text-fuchsia-100">
               ログアウト
             </button>
@@ -212,18 +370,113 @@ export default function AdminPage() {
           </>
         )}
 
+        {/* 販売実績タブ */}
+        {adminTab === "sales" && (
+          <div className="space-y-3">
+            <section className="rounded-2xl border border-cyan-300/25 bg-slate-900/65 p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-base font-black text-white">販売実績</p>
+                <p className="text-xs font-bold text-cyan-200">
+                  {totalSoldCount}個 / ¥{totalSalesAmount.toLocaleString()}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {productSales.length > 0 ? (
+                  productSales.map((item) => (
+                    <div
+                      key={item.name}
+                      className="flex items-center justify-between rounded-xl border border-cyan-300/20 bg-slate-950/55 px-3 py-2"
+                    >
+                      <p className="text-sm font-bold text-white">{item.name}</p>
+                      <div className="text-right">
+                        <p className="text-sm font-black text-cyan-100">{item.qty}個</p>
+                        <p className="text-xs text-slate-300">¥{item.amount.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-cyan-300/20 bg-slate-950/55 px-3 py-4 text-center text-sm text-slate-300">
+                    まだ販売実績はありません
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
+
         {/* 商品管理タブ */}
         {adminTab === "menu" && (
           <div className="space-y-3">
+            <section className="rounded-2xl border border-emerald-300/30 bg-slate-900/65 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-base font-black text-white">新しい商品を追加</p>
+                <button
+                  onClick={() => setIsCreateMenuFormOpen((prev) => !prev)}
+                  className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-4 py-2 text-sm font-bold text-emerald-100"
+                >
+                  {isCreateMenuFormOpen ? "閉じる" : "商品を追加する"}
+                </button>
+              </div>
+
+              {isCreateMenuFormOpen && (
+                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1.4fr)_110px_auto_auto]">
+                  <input
+                    type="text"
+                    value={newMenuName}
+                    onChange={(e) => setNewMenuName(e.target.value)}
+                    placeholder="商品名"
+                    className="rounded-lg border border-cyan-300/40 bg-slate-950/70 px-3 py-2 text-sm text-cyan-100 outline-none"
+                    autoFocus
+                  />
+                  <input
+                    type="number"
+                    value={newMenuPrice}
+                    onChange={(e) => setNewMenuPrice(e.target.value)}
+                    placeholder="価格"
+                    className="rounded-lg border border-cyan-300/40 bg-slate-950/70 px-3 py-2 text-sm text-cyan-100 outline-none"
+                  />
+                  <button
+                    onClick={handleCreateMenuItem}
+                    disabled={isCreatingMenuItem}
+                    className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-4 py-2 text-sm font-bold text-emerald-100 disabled:opacity-50"
+                  >
+                    {isCreatingMenuItem ? "追加中..." : "追加"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsCreateMenuFormOpen(false);
+                      setNewMenuName("");
+                      setNewMenuPrice("");
+                    }}
+                    className="rounded-lg border border-slate-300/40 px-4 py-2 text-sm font-bold text-slate-300"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              )}
+            </section>
             {menu.map((item) => (
               <article key={item.id} className={`rounded-2xl border p-4 transition ${
                 !item.available ? "border-fuchsia-300/40 bg-fuchsia-300/10" : "border-cyan-300/25 bg-slate-900/65"
               }`}>
                 <div className="mb-3 flex items-center justify-between">
                   <div>
-                    <p className="text-base font-black text-white">
-                      {item.emoji} {item.name}
-                    </p>
+                    {editingMenuId === item.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="rounded-lg border border-cyan-300/40 bg-slate-950/70 px-3 py-1.5 text-sm font-bold text-cyan-100 outline-none"
+                          autoFocus
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-base font-black text-white">
+                        {item.emoji ? `${item.emoji} ` : ""}{item.name}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={() => handleAvailableToggle(item.id, item.available)}
@@ -246,7 +499,6 @@ export default function AdminPage() {
                         value={editingPrice}
                         onChange={(e) => setEditingPrice(e.target.value)}
                         className="w-20 rounded-lg border border-cyan-300/40 bg-slate-950/70 px-2 py-1 text-sm text-cyan-100 outline-none"
-                        autoFocus
                       />
                       <button
                         onClick={() => handleMenuUpdate(item.id)}
@@ -255,7 +507,7 @@ export default function AdminPage() {
                         保存
                       </button>
                       <button
-                        onClick={() => setEditingMenuId(null)}
+                        onClick={clearMenuEditing}
                         className="rounded-lg border border-slate-300/40 px-3 py-1 text-sm font-bold text-slate-300"
                       >
                         キャンセル
@@ -265,10 +517,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-lg font-black text-cyan-200">¥{item.price}</span>
                       <button
-                        onClick={() => {
-                          setEditingMenuId(item.id);
-                          setEditingPrice(item.price.toString());
-                        }}
+                        onClick={() => startMenuEditing(item)}
                         className="rounded-lg border border-cyan-300/40 bg-cyan-300/15 px-3 py-1 text-sm font-bold text-cyan-100"
                       >
                         編集

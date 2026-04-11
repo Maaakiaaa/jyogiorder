@@ -34,7 +34,7 @@ export default function MenuPanel({ menu, cart, onChangeQty }: Props) {
 
             <div>
               <p className="text-base font-bold text-slate-100">
-                {item.emoji} {item.name}
+                {item.emoji ? `${item.emoji} ` : ""}{item.name}
               </p>
               <p className="mt-1 text-sm font-semibold text-cyan-200">¥{item.price}</p>
             </div>

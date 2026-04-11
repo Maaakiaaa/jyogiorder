@@ -30,7 +30,7 @@ export default function CartPanel({ cart, total, placing, onChangeQty, onPlaceOr
             className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3"
           >
             <div>
-              <p className="font-bold text-slate-100">{c.menuItem.emoji} {c.menuItem.name}</p>
+              <p className="font-bold text-slate-100">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{c.menuItem.name}</p>
               <p className="mt-1 text-sm text-cyan-200">¥{c.menuItem.price} x {c.qty}</p>
             </div>
             <div className="flex items-center gap-2 rounded-full bg-slate-950/70 px-2 py-1">
