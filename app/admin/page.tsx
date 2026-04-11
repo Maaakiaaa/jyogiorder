@@ -1,31 +1,28 @@
 ﻿"use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Order, OrderStatus } from "@/types";
+import { Order, OrderStatus, MenuItem } from "@/types";
 import { fetchAllOrders, updateOrderStatus } from "@/lib/orders";
+import { fetchMenuItems, updateMenuItem } from "@/lib/menu";
 import { supabase } from "@/lib/supabase";
+import OrderCard from "@/app/components/admin/OrderCard";
 
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "1234";
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  waiting: "待機中",
-  ready: "受取可能",
-  done: "受取完了",
-};
-
-const STATUS_CLASS: Record<OrderStatus, string> = {
-  waiting: "text-yellow-200 border-yellow-300/40",
-  ready: "text-cyan-200 border-cyan-300/40",
-  done: "text-fuchsia-200 border-fuchsia-300/40",
-};
+type AdminTab = "orders" | "menu";
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [adminTab, setAdminTab] = useState<AdminTab>("orders");
+  const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
+  const [editingPrice, setEditingPrice] = useState<string>("");
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (sessionStorage.getItem("admin_authed") === "true") {
@@ -52,8 +49,9 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try {
-      const data = await fetchAllOrders();
-      setOrders(data);
+      const [ordersData, menuData] = await Promise.all([fetchAllOrders(), fetchMenuItems()]);
+      setOrders(ordersData);
+      setMenu(menuData);
     } catch {
       // silent
     } finally {
@@ -75,6 +73,16 @@ export default function AdminPage() {
     };
   }, [authed, load]);
 
+  useEffect(() => {
+    if (!authed) return;
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [authed]);
+
   async function handleUpdate(id: string, status: OrderStatus) {
     setUpdating(id);
     try {
@@ -85,11 +93,34 @@ export default function AdminPage() {
     }
   }
 
+  async function handleMenuUpdate(menuId: number) {
+    const newPrice = parseInt(editingPrice, 10);
+    if (isNaN(newPrice)) return;
+
+    try {
+      await updateMenuItem(menuId, { price: newPrice });
+      setEditingMenuId(null);
+      setEditingPrice("");
+      await load();
+    } catch {
+      alert("更新に失敗しました");
+    }
+  }
+
+  async function handleAvailableToggle(menuId: number, currentAvailable: boolean) {
+    try {
+      await updateMenuItem(menuId, { available: !currentAvailable });
+      await load();
+    } catch {
+      alert("更新に失敗しました");
+    }
+  }
+
   if (!authed) {
     return (
-      <main className="festival-bg min-h-screen px-3 py-3">
-        <div className="relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md items-center justify-center rounded-[28px] glass-panel p-5">
-          <div className="w-full rounded-3xl border border-cyan-300/35 bg-slate-900/65 p-6">
+      <main className="min-h-screen bg-white px-3 py-3">
+        <div className="mx-auto flex min-h-[95vh] w-full max-w-md items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="w-full rounded-3xl border border-slate-200 bg-white p-6">
             <p className="text-center text-4xl">🔐</p>
             <h1 className="neon-title mt-2 text-center text-2xl font-black">ADMIN LOGIN</h1>
             <p className="mt-2 text-center text-xs text-slate-300">管理パスワードを入力してください</p>
@@ -121,18 +152,34 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="festival-bg min-h-screen px-3 py-3">
-      <div className="relative z-10 mx-auto w-full max-w-2xl rounded-[28px] glass-panel p-5">
-        <div className="mb-5 flex items-center justify-between">
+    <main className="min-h-screen bg-slate-100 px-3 py-3">
+      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
           <div>
-            <h1 className="neon-title text-2xl font-black">ADMIN PANEL</h1>
-            <p className="mt-1 text-sm text-slate-300">対応中の注文 {orders.length} 件</p>
+            <h1 className="neon-title text-2xl font-black">注文一覧</h1>
           </div>
           <div className="flex gap-2">
-            <button onClick={load} className="rounded-xl border border-cyan-300/40 px-3 py-3 text-sm font-bold text-cyan-100">
-              更新
+            <button
+              onClick={() => setAdminTab("orders")}
+              className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
+                adminTab === "orders"
+                  ? "border-cyan-300/40 bg-cyan-300/15 text-cyan-100"
+                  : "border-slate-300/30 text-slate-300"
+              }`}
+            >
+              📋 注文管理
             </button>
-            <button onClick={handleLogout} className="rounded-xl border border-fuchsia-300/40 px-3 py-3 text-sm font-bold text-fuchsia-100">
+            <button
+              onClick={() => setAdminTab("menu")}
+              className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
+                adminTab === "menu"
+                  ? "border-emerald-300/40 bg-emerald-300/15 text-emerald-100"
+                  : "border-slate-300/30 text-slate-300"
+              }`}
+            >
+              ⚙️ 商品管理
+            </button>
+            <button onClick={handleLogout} className="rounded-xl border border-fuchsia-300/40 px-3 py-2 text-sm font-bold text-fuchsia-100">
               ログアウト
             </button>
           </div>
@@ -140,48 +187,99 @@ export default function AdminPage() {
 
         {loading && <div className="py-16 text-center text-slate-300">読み込み中...</div>}
 
-        {!loading && orders.length === 0 && (
-          <div className="py-16 text-center text-slate-300">
-            <p className="text-4xl">🎉</p>
-            <p className="mt-2">注文はまだありません</p>
-          </div>
+        {/* 注文管理タブ */}
+        {adminTab === "orders" && (
+          <>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm text-slate-300">対応中の注文 {orders.length} 件</p>
+              <button onClick={load} className="rounded-xl border border-cyan-300/40 px-3 py-2 text-sm font-bold text-cyan-100">
+                更新
+              </button>
+            </div>
+
+            {!loading && orders.length === 0 && (
+              <div className="py-16 text-center text-slate-300">
+                <p className="text-4xl">🎉</p>
+                <p className="mt-2">注文はまだありません</p>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {[...orders].reverse().map((order) => (
+                <OrderCard key={order.id} order={order} now={now} isUpdating={updating === order.id} onUpdate={handleUpdate} />
+              ))}
+            </div>
+          </>
         )}
 
-        <div className="space-y-3">
-          {[...orders].reverse().map((order) => {
-            const itemsText = order.items.map((i) => `${i.name} x ${i.qty}`).join("、");
-            const isUpdating = updating === order.id;
-
-            return (
-              <article key={order.id} className="rounded-2xl border border-cyan-300/25 bg-slate-900/65 p-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-lg font-black text-white">番号 {order.num}</span>
-                  <span className={`rounded-full border px-3 py-1 text-xs font-bold ${STATUS_CLASS[order.status]}`}>
-                    {STATUS_LABEL[order.status]}
-                  </span>
+        {/* 商品管理タブ */}
+        {adminTab === "menu" && (
+          <div className="space-y-3">
+            {menu.map((item) => (
+              <article key={item.id} className={`rounded-2xl border p-4 transition ${
+                !item.available ? "border-fuchsia-300/40 bg-fuchsia-300/10" : "border-cyan-300/25 bg-slate-900/65"
+              }`}>
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-base font-black text-white">
+                      {item.emoji} {item.name}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleAvailableToggle(item.id, item.available)}
+                    className={`rounded-full px-4 py-2 text-xs font-bold transition ${
+                      item.available
+                        ? "border-emerald-300/50 bg-emerald-300/15 text-emerald-100"
+                        : "border-fuchsia-300/50 bg-fuchsia-300/15 text-fuchsia-100"
+                    }`}
+                  >
+                    {item.available ? "販売中" : "SOLDOUT"}
+                  </button>
                 </div>
-                <p className="text-sm text-slate-300">{itemsText}</p>
-                <p className="mb-3 mt-1 text-sm font-black text-cyan-200">¥{order.total.toLocaleString()}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    disabled={order.status !== "waiting" || isUpdating}
-                    onClick={() => handleUpdate(order.id, "ready")}
-                    className="rounded-xl border border-cyan-300/40 bg-cyan-300/15 py-3 text-sm font-black text-cyan-100 disabled:opacity-35"
-                  >
-                    {isUpdating ? "..." : "受け取り可能"}
-                  </button>
-                  <button
-                    disabled={order.status !== "ready" || isUpdating}
-                    onClick={() => handleUpdate(order.id, "done")}
-                    className="rounded-xl border border-fuchsia-300/40 bg-fuchsia-300/15 py-3 text-sm font-black text-fuchsia-100 disabled:opacity-35"
-                  >
-                    {isUpdating ? "..." : "受け取り完了"}
-                  </button>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-300">価格:</span>
+                  {editingMenuId === item.id ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={editingPrice}
+                        onChange={(e) => setEditingPrice(e.target.value)}
+                        className="w-20 rounded-lg border border-cyan-300/40 bg-slate-950/70 px-2 py-1 text-sm text-cyan-100 outline-none"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleMenuUpdate(item.id)}
+                        className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-sm font-bold text-emerald-100"
+                      >
+                        保存
+                      </button>
+                      <button
+                        onClick={() => setEditingMenuId(null)}
+                        className="rounded-lg border border-slate-300/40 px-3 py-1 text-sm font-bold text-slate-300"
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-black text-cyan-200">¥{item.price}</span>
+                      <button
+                        onClick={() => {
+                          setEditingMenuId(item.id);
+                          setEditingPrice(item.price.toString());
+                        }}
+                        className="rounded-lg border border-cyan-300/40 bg-cyan-300/15 px-3 py-1 text-sm font-bold text-cyan-100"
+                      >
+                        編集
+                      </button>
+                    </div>
+                  )}
                 </div>
               </article>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );

@@ -1,7 +1,8 @@
 ﻿"use client";
 
 import { useEffect, useCallback, useState } from "react";
-import { Order } from "@/types";
+import type { RealtimePostgresUpdatePayload } from "@supabase/supabase-js";
+import { Order, OrderItem } from "@/types";
 import { fetchOrder } from "@/lib/orders";
 import { supabase } from "@/lib/supabase";
 
@@ -26,6 +27,8 @@ const ORDER_STATUS_LABEL: Record<Order["status"], string> = {
   ready: "受取可能",
   done: "完了",
 };
+
+type OrderRealtimePayload = RealtimePostgresUpdatePayload<Order & Record<string, unknown>>;
 
 function orderStatusBadgeStyle(status: Order["status"]) {
   if (status === "waiting") {
@@ -64,8 +67,8 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
           table: "orders",
           filter: `id=eq.${currentOrder.id}`,
         },
-        (payload: any) => {
-          const updated = payload.new as Order;
+        (payload: OrderRealtimePayload) => {
+          const updated = payload.new;
           setCurrentOrder(updated);
           if (updated.status === "done") {
             onDone(updated.id);
@@ -152,7 +155,7 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
         <div className="mt-5 rounded-2xl border border-cyan-300/25 bg-slate-950/60 p-4">
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-200/80">注文内容</p>
           <div className="space-y-1">
-            {currentOrder.items.map((item: any, i: number) => (
+            {currentOrder.items.map((item: OrderItem, i: number) => (
               <div key={i} className="flex justify-between text-sm text-slate-200">
                 <span>{item.name} x {item.qty}</span>
                 <span>¥{(item.price * item.qty).toLocaleString()}</span>

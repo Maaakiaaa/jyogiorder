@@ -5,6 +5,7 @@ export interface MenuItem {
   name: string;
   price: number;
   emoji: string;
+  available: boolean;
 }
 
 export interface CartItem {

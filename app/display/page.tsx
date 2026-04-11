@@ -8,13 +8,12 @@ import { supabase } from "@/lib/supabase";
 export default function DisplayPage() {
   const [orders, setOrders] = useState<Order[]>([]);
 
-  const load = useCallback(async () => {
-    try {
-      const data = await fetchAllOrders();
-      setOrders(data);
-    } catch {
-      // silent
-    }
+  const load = useCallback(() => {
+    fetchAllOrders()
+      .then((data) => setOrders(data))
+      .catch(() => {
+        // silent
+      });
   }, []);
 
   useEffect(() => {

@@ -1,13 +1,14 @@
 ﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import MenuPanel from "@/app/components/costomers/MenuPanel";
 import CartPanel from "@/app/components/costomers/CartPanel";
 import WaitingPanel from "@/app/components/costomers/WaitingPanel";
 import WelcomePanel from "@/app/components/costomers/WelcomePanel";
-import { CartItem, Order } from "@/types";
+import { CartItem, Order, MenuItem } from "@/types";
 import { createOrder } from "@/lib/orders";
-import { MENU_ITEMS } from "@/lib/menu";
+import { fetchMenuItems } from "@/lib/menu";
+import { supabase } from "@/lib/supabase";
 
 type CustomerStep = "menu" | "waiting" | "welcome";
 type TabType = "menu" | "cart";
@@ -19,14 +20,35 @@ export default function CustomerPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [placing, setPlacing] = useState(false);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
 
   const cartTotal = cart.reduce((s, i) => s + i.menuItem.price * i.qty, 0);
-  const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  const loadMenu = useCallback(async () => {
+    try {
+      const items = await fetchMenuItems();
+      setMenu(items);
+    } catch {
+      // silent
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMenu();
+    const channel = supabase
+      .channel("menu-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => loadMenu())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadMenu]);
 
   function changeQty(id: number, delta: number) {
     setCart((prev) => {
       const existing = prev.find((c) => c.menuItem.id === id);
-      const menuItem = MENU_ITEMS.find((m) => m.id === id)!;
+      const menuItem = menu.find((m) => m.id === id)!;
       if (!existing) {
         if (delta <= 0) return prev;
         return [...prev, { menuItem, qty: 1 }];
@@ -119,7 +141,7 @@ export default function CustomerPage() {
 
         <section className="flex-1 overflow-y-auto px-2 py-3 animate-slide-up">
           {activeTab === "menu" ? (
-            <MenuPanel cart={cart} onChangeQty={changeQty} />
+            <MenuPanel menu={menu} cart={cart} onChangeQty={changeQty} />
           ) : (
             <CartPanel
               cart={cart}
