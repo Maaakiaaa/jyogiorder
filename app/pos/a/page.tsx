@@ -2,9 +2,10 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMenuItems } from "@/lib/menu";
-import { createOrder } from "@/lib/orders";
+import { NewOrderItem, placeOrder } from "@/lib/orders";
+import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
-import { MenuItem, Order, OrderItem, QrOrderPayload } from "@/types";
+import { MenuItem, Order, QrOrderPayload } from "@/types";
 
 type ScannedLineItem = {
   menuId: number;
@@ -13,27 +14,30 @@ type ScannedLineItem = {
   qty: number;
 };
 
-export default function CashierPage() {
+export default function PosAPage() {
   const scanInputRef = useRef<HTMLInputElement | null>(null);
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [scanError, setScanError] = useState("");
   const [rawQrText, setRawQrText] = useState("");
   const [qrPayload, setQrPayload] = useState<QrOrderPayload | null>(null);
-  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
-  const [createdOrder, setCreatedOrder] = useState<Order | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  const [nextNumber, setNextNumber] = useState("-");
 
   useEffect(() => {
     fetchMenuItems()
       .then((items) => setMenu(items))
-      .catch(() => {
-        setScanError("メニュー情報の取得に失敗しました");
-      });
+      .catch(() => setScanError("メニュー情報の取得に失敗しました"));
   }, []);
 
   useEffect(() => {
     scanInputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    setNextNumber(peekNextNumber("A"));
+  }, [confirmedOrder]);
 
   const scannedItems = useMemo<ScannedLineItem[]>(() => {
     if (!qrPayload) return [];
@@ -70,7 +74,7 @@ export default function CashierPage() {
     setQrPayload(payload);
     setRawQrText(rawValue.trim().toUpperCase());
     setScanError("");
-    setCreatedOrder(null);
+    setConfirmedOrder(null);
   }
 
   function handleImport(event?: FormEvent<HTMLFormElement>) {
@@ -83,33 +87,34 @@ export default function CashierPage() {
     }
   }
 
-  async function handleCreateOrder() {
-    if (scannedItems.length === 0 || isSubmittingOrder || hasMissingItems) return;
+  async function handleConfirmPayment() {
+    if (!qrPayload || scannedItems.length === 0 || isSubmitting || hasMissingItems) return;
 
-    setIsSubmittingOrder(true);
+    setIsSubmitting(true);
     try {
-      const items: OrderItem[] = scannedItems.map((item) => ({
+      const items: NewOrderItem[] = scannedItems.map((item) => ({
+        menuItemId: item.menuId,
         name: item.name,
-        qty: item.qty,
         price: item.price,
+        qty: item.qty,
       }));
-      const order = await createOrder(items, qrPayload?.checkoutToken);
-      setCreatedOrder(order);
+      const order = await placeOrder(qrPayload.orderId, "A", items);
+      setConfirmedOrder(order);
       setQrPayload(null);
       setRawQrText("");
       setScanError("");
       scanInputRef.current?.focus();
     } catch {
-      setScanError("注文登録に失敗しました");
+      setScanError("番号発行に失敗しました。もう一度お試しください。");
     } finally {
-      setIsSubmittingOrder(false);
+      setIsSubmitting(false);
     }
   }
 
   function resetScan() {
     setQrPayload(null);
     setRawQrText("");
-    setCreatedOrder(null);
+    setConfirmedOrder(null);
     setScanError("");
     scanInputRef.current?.focus();
   }
@@ -119,12 +124,13 @@ export default function CashierPage() {
       <div className="glass-panel relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md flex-col rounded-[28px] p-4">
         <header className="border-b border-cyan-300/20 pb-4">
           <p className="neon-title text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-200/80">
-            Cashier
+            POS · A
           </p>
-          <h1 className="neon-title mt-2 text-2xl font-black">レジ画面</h1>
+          <h1 className="neon-title mt-2 text-2xl font-black">A端末（読み取り）</h1>
           <p className="mt-2 text-sm text-slate-300">
-            入力欄にカーソルを合わせて、バーコードリーダーでQRコードを読み取ってください。
+            スキャンは内容の確認だけです。番号は支払い完了ボタンを押した瞬間に発行されます。
           </p>
+          <p className="mt-1 text-xs text-cyan-200/70">次に発行される番号: {nextNumber}</p>
         </header>
 
         <section className="mt-4 rounded-2xl border border-cyan-300/25 bg-slate-900/65 p-4">
@@ -135,7 +141,7 @@ export default function CashierPage() {
               type="text"
               value={rawQrText}
               onChange={(event) => setRawQrText(event.target.value)}
-              placeholder="V1M1Q2M3Q1"
+              placeholder="V1O..."
               className="w-full rounded-xl border border-cyan-300/30 bg-slate-950/70 px-3 py-3 text-sm text-cyan-100 outline-none"
               autoCapitalize="characters"
               autoCorrect="off"
@@ -160,7 +166,7 @@ export default function CashierPage() {
           </form>
 
           <p className="mt-3 text-xs text-slate-400">
-            QRの中身は英数字のみです。スキャナが Enter を送る設定なら、そのまま確定できます。
+            バーコードスキャナがEnterを送る設定なら、そのまま読み込みが確定します。
           </p>
         </section>
 
@@ -170,12 +176,12 @@ export default function CashierPage() {
           </div>
         )}
 
-        {createdOrder && (
+        {confirmedOrder && (
           <section className="mt-4 rounded-2xl border border-emerald-300/35 bg-emerald-300/10 p-4 text-center">
             <p className="text-sm font-bold uppercase tracking-[0.16em] text-emerald-100/80">
-              注文登録完了
+              会計完了・番号発行
             </p>
-            <p className="mt-2 text-5xl font-black text-white">{createdOrder.num}</p>
+            <p className="mt-2 text-5xl font-black text-white">{confirmedOrder.number}</p>
             <p className="mt-2 text-sm text-emerald-100">この番号で呼び出してください。</p>
           </section>
         )}
@@ -205,16 +211,16 @@ export default function CashierPage() {
 
           {hasMissingItems && (
             <p className="mt-3 text-sm text-yellow-200">
-              QR内の商品IDに対応する商品が見つからないため、注文登録はできません。
+              QR内の商品IDに対応する商品が見つからないため、番号発行はできません。
             </p>
           )}
 
           <button
-            onClick={handleCreateOrder}
-            disabled={scannedItems.length === 0 || hasMissingItems || isSubmittingOrder}
+            onClick={handleConfirmPayment}
+            disabled={scannedItems.length === 0 || hasMissingItems || isSubmitting}
             className="neon-button mt-4 w-full rounded-2xl px-4 py-4 text-base font-black disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmittingOrder ? "登録中..." : "会計完了・注文登録"}
+            {isSubmitting ? "発行中..." : "支払い完了・番号発行"}
           </button>
         </section>
       </div>
