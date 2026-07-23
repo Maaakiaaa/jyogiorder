@@ -5,7 +5,7 @@ import { Order, OrderStatus } from "@/types";
 const ELAPSED_CLASS = {
   normal: "border-emerald-300/70 bg-white text-emerald-700",
   warning: "border-orange-500/70 bg-white text-orange-700 ring-1 ring-orange-300/40",
-  danger: "border-#e62600-400/70 bg-white text-rose-700 ring-1 ring-rose-300/40",
+  danger: "border-rose-500/70 bg-white text-rose-700 ring-1 ring-rose-300/40",
 } as const;
 
 const CARD_CLASS = {
@@ -21,9 +21,11 @@ const CARD_BACKGROUND = {
 } as const;
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
-  waiting: "待機中",
-  ready: "受取可能",
-  done: "受取完了",
+  received: "受付",
+  cooking: "調理中",
+  ready: "呼び出し中",
+  handed: "受け渡し済み",
+  cancelled: "取消",
 };
 
 type ElapsedVariant = keyof typeof ELAPSED_CLASS;
@@ -32,14 +34,16 @@ interface Props {
   order: Order;
   now: number;
   isUpdating: boolean;
-  onUpdate: (id: string, status: OrderStatus) => void;
+  onAdvance: (id: string) => void;
+  onBack: (id: string) => void;
+  onCancel: (id: string) => void;
 }
 
 function formatElapsedTime(createdAt: string, now: number) {
   const elapsedSeconds = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 1000));
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
-  const variant: ElapsedVariant = elapsedSeconds > 60 ? "danger" : elapsedSeconds > 20 ? "warning" : "normal";
+  const variant: ElapsedVariant = elapsedSeconds > 300 ? "danger" : elapsedSeconds > 120 ? "warning" : "normal";
 
   return {
     label: `${minutes}:${String(seconds).padStart(2, "0")}`,
@@ -48,7 +52,7 @@ function formatElapsedTime(createdAt: string, now: number) {
   };
 }
 
-export default function OrderCard({ order, now, isUpdating, onUpdate }: Props) {
+export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, onCancel }: Props) {
   const itemsText = order.items.map((i) => `${i.name} x ${i.qty}`).join("、");
   const elapsed = formatElapsedTime(order.created_at, now);
 
@@ -59,18 +63,18 @@ export default function OrderCard({ order, now, isUpdating, onUpdate }: Props) {
     >
       <div className="relative z-10">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-lg font-black text-slate-900">番号 {order.num}</span>
+          <span className="text-lg font-black text-slate-900">番号 {order.number}</span>
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${elapsed.tone}`}>
-              {elapsed.variant === "warning" ? "2分経過" : elapsed.variant === "danger" ? "急いでください！！" : "経過"} {elapsed.label}
+              経過 {elapsed.label}
             </span>
             <span
               className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                order.status === "waiting"
+                order.status === "received"
                   ? "text-yellow-700 border-yellow-400/50 bg-white"
-                  : order.status === "ready"
-                    ? "text-cyan-700 border-blue-400/50 bg-white"
-                    : "text-fuchsia-700 border-blue-400/50 bg-blue"
+                  : order.status === "cooking"
+                    ? "text-amber-700 border-amber-400/50 bg-white"
+                    : "text-cyan-700 border-blue-400/50 bg-white"
               }`}
             >
               {STATUS_LABEL[order.status]}
@@ -79,30 +83,28 @@ export default function OrderCard({ order, now, isUpdating, onUpdate }: Props) {
         </div>
         <p className="text-sm text-slate-700">{itemsText}</p>
         <p className="mb-3 mt-1 text-sm font-black text-cyan-700">¥{order.total.toLocaleString()}</p>
-        <div className={`grid gap-2 ${order.status === "ready" ? "grid-cols-3" : "grid-cols-2"}`}>
+        <div className="grid grid-cols-3 gap-2">
           <button
-            disabled={order.status !== "waiting" || isUpdating}
-            onClick={() => onUpdate(order.id, "ready")}
+            disabled={order.status !== "cooking" || isUpdating}
+            onClick={() => onBack(order.id)}
+            className="rounded-xl border border-slate-300/70 bg-white py-3 text-sm font-black text-slate-700 disabled:opacity-35"
+          >
+            {isUpdating ? "..." : "戻す"}
+          </button>
+          <button
+            disabled={order.status === "ready" || isUpdating}
+            onClick={() => onAdvance(order.id)}
             className="rounded-xl border border-cyan-300/60 bg-white py-3 text-sm font-black text-cyan-700 disabled:opacity-35"
           >
-            {isUpdating ? "..." : "受け取り可能"}
+            {isUpdating ? "..." : order.status === "received" ? "調理を始める" : "できあがり"}
           </button>
           <button
-            disabled={order.status !== "ready" || isUpdating}
-            onClick={() => onUpdate(order.id, "done")}
+            disabled={isUpdating}
+            onClick={() => onCancel(order.id)}
             className="rounded-xl border border-fuchsia-300/60 bg-white py-3 text-sm font-black text-fuchsia-700 disabled:opacity-35"
           >
-            {isUpdating ? "..." : "受け取り完了"}
+            {isUpdating ? "..." : "取消"}
           </button>
-          {order.status === "ready" && (
-            <button
-              disabled={isUpdating}
-              onClick={() => onUpdate(order.id, "waiting")}
-              className="rounded-xl border border-slate-300/70 bg-white py-3 text-sm font-black text-slate-700 disabled:opacity-35"
-            >
-              {isUpdating ? "..." : "戻す"}
-            </button>
-          )}
         </div>
       </div>
     </article>
