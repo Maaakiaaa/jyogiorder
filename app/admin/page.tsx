@@ -1,15 +1,14 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Order, OrderStatus, MenuItem } from "@/types";
-import { fetchAllOrders, fetchSalesOrders, updateOrderStatus } from "@/lib/orders";
-import { createMenuItem, fetchMenuItems, updateMenuItem } from "@/lib/menu";
+import { Order, MenuItem } from "@/types";
+import { fetchSalesOrders } from "@/lib/orders";
+import { createMenuItem, fetchAllMenuItemsForAdmin, updateMenuItem } from "@/lib/menu";
 import { supabase } from "@/lib/supabase";
-import OrderCard from "@/app/components/admin/OrderCard";
 
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "1234";
 
-type AdminTab = "orders" | "menu" | "sales";
+type AdminTab = "menu" | "sales";
 
 type ProductSales = {
   name: string;
@@ -44,12 +43,10 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
   const [input, setInput] = useState("");
   const [error, setError] = useState(false);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [salesOrders, setSalesOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState<string | null>(null);
-  const [adminTab, setAdminTab] = useState<AdminTab>("orders");
+  const [adminTab, setAdminTab] = useState<AdminTab>("menu");
   const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<string>("");
   const [editingPrice, setEditingPrice] = useState<string>("");
@@ -57,7 +54,6 @@ export default function AdminPage() {
   const [newMenuPrice, setNewMenuPrice] = useState("");
   const [isCreateMenuFormOpen, setIsCreateMenuFormOpen] = useState(false);
   const [isCreatingMenuItem, setIsCreatingMenuItem] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (sessionStorage.getItem("admin_authed") === "true") {
@@ -84,8 +80,10 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try {
-      const [ordersData, menuData, salesOrderData] = await Promise.all([fetchAllOrders(), fetchMenuItems(), fetchSalesOrders()]);
-      setOrders(ordersData);
+      const [menuData, salesOrderData] = await Promise.all([
+        fetchAllMenuItemsForAdmin(),
+        fetchSalesOrders(),
+      ]);
       setMenu(menuData);
       setSalesOrders(salesOrderData);
     } catch {
@@ -172,34 +170,15 @@ export default function AdminPage() {
     load();
 
     const channel = supabase
-      .channel("admin-orders")
+      .channel("admin-data")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => load())
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [authed, load]);
-
-  useEffect(() => {
-    if (!authed) return;
-
-    const timer = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-
-    return () => window.clearInterval(timer);
-  }, [authed]);
-
-  async function handleUpdate(id: string, status: OrderStatus) {
-    setUpdating(id);
-    try {
-      await updateOrderStatus(id, status);
-      await load();
-    } finally {
-      setUpdating(null);
-    }
-  }
 
   async function handleMenuUpdate(menuId: number) {
     const newName = editingName.trim();
@@ -226,11 +205,7 @@ export default function AdminPage() {
 
     setIsCreatingMenuItem(true);
     try {
-      await createMenuItem({
-        name,
-        price,
-        available: true,
-      });
+      await createMenuItem({ name, price });
       setNewMenuName("");
       setNewMenuPrice("");
       setIsCreateMenuFormOpen(false);
@@ -257,7 +232,16 @@ export default function AdminPage() {
 
   async function handleAvailableToggle(menuId: number, currentAvailable: boolean) {
     try {
-      await updateMenuItem(menuId, { available: !currentAvailable });
+      await updateMenuItem(menuId, { isAvailable: !currentAvailable });
+      await load();
+    } catch (error) {
+      alert(`更新に失敗しました: ${getErrorMessage(error)}`);
+    }
+  }
+
+  async function handleActiveToggle(menuId: number, currentActive: boolean) {
+    try {
+      await updateMenuItem(menuId, { isActive: !currentActive });
       await load();
     } catch (error) {
       alert(`更新に失敗しました: ${getErrorMessage(error)}`);
@@ -304,19 +288,9 @@ export default function AdminPage() {
       <div className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h1 className="neon-title text-2xl font-black">注文一覧</h1>
+            <h1 className="neon-title text-2xl font-black">管理画面</h1>
           </div>
           <div className="flex gap-2">
-            <button
-              onClick={() => setAdminTab("orders")}
-              className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
-                adminTab === "orders"
-                  ? "border-cyan-300/40 bg-cyan-300/15 text-cyan-100"
-                  : "border-slate-300/30 text-slate-300"
-              }`}
-            >
-              📋 注文管理
-            </button>
             <button
               onClick={() => setAdminTab("menu")}
               className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
@@ -344,31 +318,6 @@ export default function AdminPage() {
         </div>
 
         {loading && <div className="py-16 text-center text-slate-300">読み込み中...</div>}
-
-        {/* 注文管理タブ */}
-        {adminTab === "orders" && (
-          <>
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm text-slate-300">対応中の注文 {orders.length} 件</p>
-              <button onClick={load} className="rounded-xl border border-cyan-300/40 px-3 py-2 text-sm font-bold text-cyan-100">
-                更新
-              </button>
-            </div>
-
-            {!loading && orders.length === 0 && (
-              <div className="py-16 text-center text-slate-300">
-                <p className="text-4xl">🎉</p>
-                <p className="mt-2">注文はまだありません</p>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {[...orders].reverse().map((order) => (
-                <OrderCard key={order.id} order={order} now={now} isUpdating={updating === order.id} onUpdate={handleUpdate} />
-              ))}
-            </div>
-          </>
-        )}
 
         {/* 販売実績タブ */}
         {adminTab === "sales" && (
@@ -458,7 +407,11 @@ export default function AdminPage() {
             </section>
             {menu.map((item) => (
               <article key={item.id} className={`rounded-2xl border p-4 transition ${
-                !item.available ? "border-fuchsia-300/40 bg-fuchsia-300/10" : "border-cyan-300/25 bg-slate-900/65"
+                !item.isActive
+                  ? "border-slate-400/40 bg-slate-500/10 opacity-60"
+                  : !item.isAvailable
+                    ? "border-fuchsia-300/40 bg-fuchsia-300/10"
+                    : "border-cyan-300/25 bg-slate-900/65"
               }`}>
                 <div className="mb-3 flex items-center justify-between">
                   <div>
@@ -475,19 +428,29 @@ export default function AdminPage() {
                     ) : (
                       <p className="text-base font-black text-white">
                         {item.emoji ? `${item.emoji} ` : ""}{item.name}
+                        {!item.isActive && <span className="ml-2 text-xs font-bold text-slate-400">非表示</span>}
                       </p>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleAvailableToggle(item.id, item.available)}
-                    className={`rounded-full px-4 py-2 text-xs font-bold transition ${
-                      item.available
-                        ? "border-emerald-300/50 bg-emerald-300/15 text-emerald-100"
-                        : "border-fuchsia-300/50 bg-fuchsia-300/15 text-fuchsia-100"
-                    }`}
-                  >
-                    {item.available ? "販売中" : "SOLDOUT"}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAvailableToggle(item.id, item.isAvailable)}
+                      disabled={!item.isActive}
+                      className={`rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${
+                        item.isAvailable
+                          ? "border-emerald-300/50 bg-emerald-300/15 text-emerald-100"
+                          : "border-fuchsia-300/50 bg-fuchsia-300/15 text-fuchsia-100"
+                      }`}
+                    >
+                      {item.isAvailable ? "販売中" : "SOLDOUT"}
+                    </button>
+                    <button
+                      onClick={() => handleActiveToggle(item.id, item.isActive)}
+                      className="rounded-full border border-slate-300/50 bg-slate-800/40 px-4 py-2 text-xs font-bold text-slate-200"
+                    >
+                      {item.isActive ? "削除" : "復元"}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
