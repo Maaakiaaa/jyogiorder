@@ -2,75 +2,84 @@ import { MenuItem } from "@/types";
 import { supabase } from "./supabase";
 
 export const MENU_ITEMS: MenuItem[] = [
-  { id: 1, name: "焼き鳥", price: 200, emoji: "🐔", available: true },
-  { id: 2, name: "かき氷", price: 250, emoji: "🐔", available: true },
-  { id: 3, name: "コーラ", price: 150, emoji: "🥤", available: true },
-  { id: 4, name: "水", price: 100, emoji: "💧", available: true },
+  { id: 1, categoryId: 1, name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true },
+  { id: 2, categoryId: 1, name: "かき氷", price: 250, emoji: "🍧", isAvailable: true, isActive: true },
+  { id: 3, categoryId: 1, name: "コーラ", price: 150, emoji: "🥤", isAvailable: true, isActive: true },
+  { id: 4, categoryId: 1, name: "水", price: 100, emoji: "💧", isAvailable: true, isActive: true },
 ];
 
-// Supabase からメニューを取得する
+type MenuItemRow = {
+  id: number;
+  category_id: number | null;
+  name: string;
+  price: number;
+  emoji: string | null;
+  is_available: boolean;
+  is_active: boolean;
+};
+
+function fromRow(row: MenuItemRow): MenuItem {
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    name: row.name,
+    price: row.price,
+    emoji: row.emoji ?? undefined,
+    isAvailable: row.is_available,
+    isActive: row.is_active,
+  };
+}
+
+// お客さん画面・レジ画面用: 廃止(is_active=false)された品目は返さない
 export async function fetchMenuItems(): Promise<MenuItem[]> {
   try {
     const { data, error } = await supabase
       .from("menu_items")
       .select("*")
-      .order("id", { ascending: true });
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
 
     if (error) {
       console.error("Menu fetch error:", error);
       return MENU_ITEMS;
     }
 
-    return (data ?? []) as MenuItem[];
+    return (data ?? []).map(fromRow);
   } catch {
     return MENU_ITEMS;
   }
 }
 
-// メニュー項目を新規作成する（管理画面用）
-export async function createMenuItem(item: Omit<MenuItem, "id">): Promise<void> {
-  const insertPayload = {
-    name: item.name,
-    price: item.price,
-    available: item.available,
-  };
-
-  const { error } = await supabase
+// 管理画面用: 廃止済みも含めて全件返す
+export async function fetchAllMenuItemsForAdmin(): Promise<MenuItem[]> {
+  const { data, error } = await supabase
     .from("menu_items")
-    .insert(insertPayload);
+    .select("*")
+    .order("sort_order", { ascending: true });
 
-  if (!error) return;
-
-  const needsExplicitId =
-    error.message.toLowerCase().includes("id") &&
-    (error.message.toLowerCase().includes("null") ||
-      error.message.toLowerCase().includes("default"));
-
-  if (!needsExplicitId) throw error;
-
-  const { data: latestItem, error: latestError } = await supabase
-    .from("menu_items")
-    .select("id")
-    .order("id", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (latestError) throw latestError;
-
-  const nextId = (latestItem?.id ?? 0) + 1;
-  const { error: retryError } = await supabase
-    .from("menu_items")
-    .insert({ id: nextId, ...insertPayload });
-
-  if (retryError) throw retryError;
+  if (error) throw error;
+  return (data ?? []).map(fromRow);
 }
 
-// メニュー項目を更新する（管理画面用）
-export async function updateMenuItem(id: number, updates: Partial<MenuItem>): Promise<void> {
-  const { error } = await supabase
-    .from("menu_items")
-    .update(updates)
-    .eq("id", id);
+export async function createMenuItem(item: Pick<MenuItem, "name" | "price">): Promise<void> {
+  const { error } = await supabase.from("menu_items").insert({
+    name: item.name,
+    price: item.price,
+  });
 
+  if (error) throw error;
+}
+
+export async function updateMenuItem(
+  id: number,
+  updates: Partial<Pick<MenuItem, "name" | "price" | "isAvailable" | "isActive">>
+): Promise<void> {
+  const payload: Record<string, unknown> = {};
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.price !== undefined) payload.price = updates.price;
+  if (updates.isAvailable !== undefined) payload.is_available = updates.isAvailable;
+  if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+  const { error } = await supabase.from("menu_items").update(payload).eq("id", id);
   if (error) throw error;
 }

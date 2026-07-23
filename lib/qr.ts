@@ -1,23 +1,38 @@
 import { QrOrderPayload } from "@/types";
 
 const PAYLOAD_PREFIX = "V1";
-const TOKEN_PREFIX = "T";
-const TOKEN_LENGTH = 12;
+const ORDER_MARKER = "O";
+const UUID_HEX_LENGTH = 32;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ITEM_PATTERN = /M(\d+)Q(\d+)/g;
+
+function stripHyphens(uuid: string): string {
+  return uuid.replace(/-/g, "");
+}
+
+function toCanonicalUuid(hex32: string): string {
+  return [
+    hex32.slice(0, 8),
+    hex32.slice(8, 12),
+    hex32.slice(12, 16),
+    hex32.slice(16, 20),
+    hex32.slice(20, 32),
+  ].join("-").toLowerCase();
+}
 
 export function isQrPayload(value: unknown): value is QrOrderPayload {
   if (!value || typeof value !== "object") return false;
 
   const candidate = value as {
     version?: unknown;
-    checkoutToken?: unknown;
+    orderId?: unknown;
     items?: unknown;
   };
 
   return (
     candidate.version === 1 &&
-    typeof candidate.checkoutToken === "string" &&
-    /^[A-Z0-9]{12}$/.test(candidate.checkoutToken) &&
+    typeof candidate.orderId === "string" &&
+    UUID_PATTERN.test(candidate.orderId) &&
     Array.isArray(candidate.items) &&
     candidate.items.every((item) => {
       if (!item || typeof item !== "object") return false;
@@ -28,19 +43,26 @@ export function isQrPayload(value: unknown): value is QrOrderPayload {
 }
 
 export function serializeQrPayload(payload: QrOrderPayload): string {
+  const hex32 = stripHyphens(payload.orderId).toUpperCase();
   const items = payload.items.map((item) => `M${item.menuId}Q${item.qty}`).join("");
-  return `${PAYLOAD_PREFIX}${TOKEN_PREFIX}${payload.checkoutToken}${items}`;
+  return `${PAYLOAD_PREFIX}${ORDER_MARKER}${hex32}${items}`;
 }
 
 export function parseQrPayload(rawValue: string): QrOrderPayload {
   const normalized = rawValue.trim().toUpperCase();
 
-  if (!normalized.startsWith(`${PAYLOAD_PREFIX}${TOKEN_PREFIX}`)) {
+  if (!normalized.startsWith(`${PAYLOAD_PREFIX}${ORDER_MARKER}`)) {
     throw new Error("QRコードの形式が不正です");
   }
 
-  const checkoutToken = normalized.slice(PAYLOAD_PREFIX.length + TOKEN_PREFIX.length, PAYLOAD_PREFIX.length + TOKEN_PREFIX.length + TOKEN_LENGTH);
-  const itemsPart = normalized.slice(PAYLOAD_PREFIX.length + TOKEN_PREFIX.length + TOKEN_LENGTH);
+  const headerLength = PAYLOAD_PREFIX.length + ORDER_MARKER.length;
+  const hex32 = normalized.slice(headerLength, headerLength + UUID_HEX_LENGTH);
+  const itemsPart = normalized.slice(headerLength + UUID_HEX_LENGTH);
+
+  if (hex32.length !== UUID_HEX_LENGTH || !/^[0-9A-F]{32}$/.test(hex32)) {
+    throw new Error("QRコードの形式が不正です");
+  }
+
   const items = Array.from(itemsPart.matchAll(ITEM_PATTERN)).map((match) => ({
     menuId: Number.parseInt(match[1], 10),
     qty: Number.parseInt(match[2], 10),
@@ -54,7 +76,7 @@ export function parseQrPayload(rawValue: string): QrOrderPayload {
 
   const payload: QrOrderPayload = {
     version: 1,
-    checkoutToken,
+    orderId: toCanonicalUuid(hex32),
     items,
   };
 
@@ -65,6 +87,7 @@ export function parseQrPayload(rawValue: string): QrOrderPayload {
   return payload;
 }
 
-export function createCheckoutToken(): string {
-  return crypto.randomUUID().replace(/-/g, "").toUpperCase().slice(0, TOKEN_LENGTH);
+// 固有ID = 冪等キー。カート組み立て時にクライアントで生成し、そのまま orders.id にする。
+export function createOrderId(): string {
+  return crypto.randomUUID();
 }

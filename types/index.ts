@@ -1,11 +1,14 @@
-export type OrderStatus = "waiting" | "ready" | "done";
+export type OrderStatus = "received" | "cooking" | "ready" | "handed" | "cancelled";
+export type OrderPrefix = "A" | "B";
 
 export interface MenuItem {
   id: number;
+  categoryId: number | null;
   name: string;
   price: number;
   emoji?: string;
-  available: boolean;
+  isAvailable: boolean;
+  isActive: boolean;
 }
 
 export interface CartItem {
@@ -20,22 +23,25 @@ export interface QrCartItem {
 
 export interface QrOrderPayload {
   version: 1;
-  checkoutToken: string;
+  orderId: string;
   items: QrCartItem[];
 }
 
 export interface OrderItem {
+  menuItemId: number | null;
   name: string;
-  qty: number;
   price: number;
-  checkoutToken?: string;
+  qty: number;
 }
 
 export interface Order {
   id: string;
-  num: number;
-  items: OrderItem[];
+  prefix: OrderPrefix;
+  seq: number;
+  number: string;
   status: OrderStatus;
   total: number;
+  items: OrderItem[];
   created_at: string;
+  updated_at: string;
 }
