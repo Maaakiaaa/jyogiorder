@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useCallback, useState } from "react";
 import type { RealtimePostgresUpdatePayload } from "@supabase/supabase-js";
-import { Order, OrderItem } from "@/types";
+import { Order, OrderStatus } from "@/types";
 import { fetchOrder } from "@/lib/orders";
 import { supabase } from "@/lib/supabase";
 
@@ -15,27 +15,41 @@ interface Props {
   onBackToMenu: () => void;
 }
 
-function progressValue(status: Order["status"]) {
-  if (status === "waiting") return 45;
+function progressValue(status: OrderStatus) {
+  if (status === "received") return 25;
+  if (status === "cooking") return 60;
   if (status === "ready") return 100;
-  if (status === "done") return 100;
-  return 20;
+  if (status === "handed") return 100;
+  return 0;
 }
 
-const ORDER_STATUS_LABEL: Record<Order["status"], string> = {
-  waiting: "調理中",
+const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  received: "受付済み",
+  cooking: "調理中",
   ready: "受取可能",
-  done: "完了",
+  handed: "受け渡し済み",
+  cancelled: "取消",
 };
 
-type OrderRealtimePayload = RealtimePostgresUpdatePayload<Order & Record<string, unknown>>;
+type OrderRow = {
+  id: string;
+  status: OrderStatus;
+};
 
-function orderStatusBadgeStyle(status: Order["status"]) {
-  if (status === "waiting") {
+type OrderRealtimePayload = RealtimePostgresUpdatePayload<OrderRow & Record<string, unknown>>;
+
+function orderStatusBadgeStyle(status: OrderStatus) {
+  if (status === "received") {
+    return { backgroundColor: "#5B4A00", borderColor: "#FACC15", color: "#FEF08A" };
+  }
+  if (status === "cooking") {
     return { backgroundColor: "#5B4A00", borderColor: "#FACC15", color: "#FEF08A" };
   }
   if (status === "ready") {
     return { backgroundColor: "#064E3B", borderColor: "#34D399", color: "#A7F3D0" };
+  }
+  if (status === "cancelled") {
+    return { backgroundColor: "#4A0410", borderColor: "#F87171", color: "#FECACA" };
   }
   return { backgroundColor: "#4A044E", borderColor: "#E879F9", color: "#F5D0FE" };
 }
@@ -51,7 +65,7 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
     const latest = await fetchOrder(currentOrder.id);
     if (!latest) return;
     setCurrentOrder(latest);
-    if (latest.status === "done") {
+    if (latest.status === "handed") {
       onDone(latest.id);
     }
   }, [currentOrder.id, onDone]);
@@ -68,22 +82,24 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
           filter: `id=eq.${currentOrder.id}`,
         },
         (payload: OrderRealtimePayload) => {
-          const updated = payload.new;
-          setCurrentOrder(updated);
-          if (updated.status === "done") {
-            onDone(updated.id);
+          // 行の更新通知だけを合図にして、実体は取り直す(保険としての再取得)。
+          void poll();
+          if (payload.new.status === "handed") {
+            onDone(payload.new.id);
           }
         }
       )
       .subscribe();
 
     const timer = setInterval(poll, 4000);
+    void poll();
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timer);
     };
-  }, [currentOrder.id, onDone, poll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrder.id]);
 
   const progress = progressValue(currentOrder.status);
 
@@ -114,7 +130,7 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
                     : "border-white/15 bg-slate-900/60 text-slate-200"
                 }`}
               >
-                <span className="block text-sm font-black">#{o.num}</span>
+                <span className="block text-sm font-black">#{o.number}</span>
                 <span
                   className="mt-1 inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-[0.08em]"
                   style={orderStatusBadgeStyle(o.status)}
@@ -128,13 +144,13 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
 
         <div className="mt-5 rounded-2xl border border-cyan-300/35 bg-slate-950/70 p-4">
           <p className="text-sm text-slate-300">呼び出し番号</p>
-          <p className="neon-title mt-2 text-6xl font-black text-cyan-200">{currentOrder.num}</p>
+          <p className="neon-title mt-2 text-6xl font-black text-cyan-200">{currentOrder.number}</p>
         </div>
 
         <div className="mt-6 rounded-2xl border border-fuchsia-300/30 bg-slate-900/60 p-4">
           <div className="mb-3 grid grid-cols-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-slate-300">
-            <span className={progress >= 20 ? "text-cyan-200" : ""}>注文済み</span>
-            <span className={currentOrder.status === "waiting" ? "flashing-cooking text-yellow-200" : "text-cyan-200"}>調理中</span>
+            <span className={progress >= 25 ? "text-cyan-200" : ""}>注文済み</span>
+            <span className={currentOrder.status === "cooking" ? "flashing-cooking text-yellow-200" : "text-cyan-200"}>調理中</span>
             <span className={progress === 100 ? "text-fuchsia-200" : ""}>受け取り可能</span>
           </div>
 
@@ -148,14 +164,16 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
           <p className="mt-4 text-sm text-cyan-100/90">
             {currentOrder.status === "ready"
               ? "受け取り可能です。カウンターまでお越しください。"
-              : "調理中です。画面は自動更新されます。"}
+              : currentOrder.status === "cancelled"
+                ? "この注文は取り消されました。レジまでお問い合わせください。"
+                : "調理中です。画面は自動更新されます。"}
           </p>
         </div>
 
         <div className="mt-5 rounded-2xl border border-cyan-300/25 bg-slate-950/60 p-4">
           <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-200/80">注文内容</p>
           <div className="space-y-1">
-            {currentOrder.items.map((item: OrderItem, i: number) => (
+            {currentOrder.items.map((item, i) => (
               <div key={i} className="flex justify-between text-sm text-slate-200">
                 <span>{item.name} x {item.qty}</span>
                 <span>¥{(item.price * item.qty).toLocaleString()}</span>

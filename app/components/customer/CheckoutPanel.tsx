@@ -9,23 +9,23 @@ import { CartItem, QrOrderPayload } from "@/types";
 interface Props {
   cart: CartItem[];
   total: number;
-  checkoutToken: string;
+  orderId: string;
   onBack: () => void;
 }
 
-export default function CheckoutPanel({ cart, total, checkoutToken, onBack }: Props) {
+export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
   const [qrCodeUrl, setQrCodeUrl] = useState("");
 
   const qrPayload = useMemo<QrOrderPayload>(
     () => ({
       version: 1,
-      checkoutToken,
+      orderId,
       items: cart.map((item) => ({
         menuId: item.menuItem.id,
         qty: item.qty,
       })),
     }),
-    [cart, checkoutToken]
+    [cart, orderId]
   );
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function CheckoutPanel({ cart, total, checkoutToken, onBack }: Pr
       <div className="rounded-2xl border border-cyan-300/30 bg-slate-900/65 p-4 text-center">
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-cyan-200/80">Checkout QR</p>
         <h2 className="mt-2 text-xl font-black text-white">レジで読み取ってください</h2>
-        <p className="mt-2 text-sm text-slate-300">会計完了後、自動でお客様情報へ切り替わります。</p>
+        <p className="mt-2 text-sm text-slate-300">これはまだ注文ではありません。会計時にレジで番号が発行されます。</p>
       </div>
 
       <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-2xl border border-fuchsia-300/30 bg-slate-900/60 p-4">

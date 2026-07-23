@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { CartItem, MenuItem } from "@/types";
 
@@ -17,7 +17,7 @@ export default function MenuPanel({ menu, cart, onChangeQty }: Props) {
     <div className="space-y-4 px-3 py-2">
       {menu.map((item) => {
         const qty = getQty(item.id);
-        const isSoldout = !item.available;
+        const isSoldout = !item.isAvailable;
 
         return (
           <article
