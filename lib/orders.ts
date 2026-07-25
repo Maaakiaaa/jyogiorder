@@ -1,5 +1,12 @@
 import { supabase } from "./supabase";
 import { issueNextNumber } from "./numbering";
+import {
+  enqueuePendingOrder,
+  getPendingOrder,
+  listPendingOrders,
+  pendingOrderToOrder,
+  removePendingOrder,
+} from "./offlineQueue";
 import { Order, OrderItem, OrderPrefix, OrderStatus } from "@/types";
 
 type OrderRow = {
@@ -57,50 +64,111 @@ export type NewOrderItem = {
   qty: number;
 };
 
+// fetchOrder()はUI側のポーリング用に「取得できなければnull」という緩い契約にしているため、
+// ネットワーク断と「本当に存在しない」を区別できない。冪等性の判定にはその区別が必須なので、
+// ここではエラーを飲み込まずそのまま投げる専用の取得関数を使う。
+async function findExistingOrder(orderId: string): Promise<Order | null> {
+  const { data, error } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return fromRows(data as OrderRow, await fetchItemsForOrder(orderId));
+}
+
 // 冪等な注文確定: 同じ orderId が二度渡された場合(二重スキャン・オフライン復帰後の再送)は、
-// 新規作成せず既存の注文をそのまま返す。番号は既存注文があればそれを使う。
-// 番号発行(issueNextNumber)は、まだ存在しない注文が確定した場合の一度だけ行われる。
+// 新規作成せず既存の注文をそのまま返す。番号は既存注文(またはオフラインキューに確保済みの分)が
+// あればそれを使い、まだどこにもなければここで一度だけ issueNextNumber() する。
+//
+// 通信不良でDBへの書き込みが確定できない場合でも、番号はローカルで確保済みなのでその場で返す。
+// 確保した内容はオフラインキュー(lib/offlineQueue.ts)に積んでおき、flushPendingOrders()で
+// オンライン復帰後に再送する(spec: 番号返却の失敗より、番号を使い切ってでも壊れないことを優先する)。
 export async function placeOrder(
   orderId: string,
   prefix: OrderPrefix,
   items: NewOrderItem[]
 ): Promise<Order> {
-  const existing = await fetchOrder(orderId);
-  if (existing) return existing;
+  const pending = getPendingOrder(orderId);
 
-  const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const { seq, number } = issueNextNumber(prefix);
+  let existing: Order | null = null;
+  try {
+    existing = await findExistingOrder(orderId);
+  } catch {
+    // サーバーの状態が確認できない(オフライン等)。楽観的に「未登録」とはみなさない。
+    if (pending) return pendingOrderToOrder(pending);
 
-  const { data: insertedOrder, error: insertOrderError } = await supabase
-    .from("orders")
-    .insert({ id: orderId, prefix, seq, number, total, status: "received" })
-    .select()
-    .single();
-
-  if (insertOrderError) {
-    // 発行済み番号がここで無駄になるが、ローカル採番はDBの成否に関わらず前に進める
-    // (spec: 番号返却の失敗より、番号を使い切ってでも壊れないことを優先する)。
-    if (insertOrderError.code === "23505") {
-      // unique制約違反(orders.id 重複) = 別経路で既に登録済み。既存注文を返す。
-      const raced = await fetchOrder(orderId);
-      if (raced) return raced;
-    }
-    throw insertOrderError;
+    const total = orderTotalFromNewItems(items);
+    const { seq, number } = issueNextNumber(prefix);
+    const createdAt = new Date().toISOString();
+    enqueuePendingOrder({ orderId, prefix, seq, number, items, total, createdAt });
+    return pendingOrderToOrder({ orderId, prefix, seq, number, items, total, createdAt });
   }
 
-  const { error: insertItemsError } = await supabase.from("order_items").insert(
-    items.map((item) => ({
-      order_id: orderId,
-      menu_item_id: item.menuItemId,
-      name_snapshot: item.name,
-      price_snapshot: item.price,
-      qty: item.qty,
-    }))
-  );
+  if (existing) {
+    removePendingOrder(orderId);
+    return existing;
+  }
 
-  if (insertItemsError) throw insertItemsError;
+  const total = pending?.total ?? orderTotalFromNewItems(items);
+  const { seq, number } = pending ?? issueNextNumber(prefix);
+  const createdAt = pending?.createdAt ?? new Date().toISOString();
 
-  return fromRows(insertedOrder as OrderRow, await fetchItemsForOrder(orderId));
+  if (!pending) {
+    enqueuePendingOrder({ orderId, prefix, seq, number, items, total, createdAt });
+  }
+
+  try {
+    const { data: insertedOrder, error: insertOrderError } = await supabase
+      .from("orders")
+      .insert({ id: orderId, prefix, seq, number, total, status: "received" })
+      .select()
+      .single();
+
+    if (insertOrderError) {
+      if (insertOrderError.code === "23505") {
+        // unique制約違反(orders.id 重複) = 別経路で既に登録済み。既存注文を返す。
+        const raced = await findExistingOrder(orderId).catch(() => null);
+        if (raced) {
+          removePendingOrder(orderId);
+          return raced;
+        }
+      }
+      throw insertOrderError;
+    }
+
+    const { error: insertItemsError } = await supabase.from("order_items").insert(
+      items.map((item) => ({
+        order_id: orderId,
+        menu_item_id: item.menuItemId,
+        name_snapshot: item.name,
+        price_snapshot: item.price,
+        qty: item.qty,
+      }))
+    );
+
+    if (insertItemsError) throw insertItemsError;
+
+    removePendingOrder(orderId);
+    return fromRows(insertedOrder as OrderRow, await fetchItemsForOrder(orderId));
+  } catch {
+    // 番号はキューに確保済みなので、そのまま返してオンライン復帰時の再送に委ねる。
+    return pendingOrderToOrder({ orderId, prefix, seq, number, items, total, createdAt });
+  }
+}
+
+// オフラインキューに溜まった注文を再送する。オンライン復帰時・定期ポーリングから呼ぶ。
+// 各要素はplaceOrder()を再実行するだけで、成功すればキューから自動的に外れる。
+export async function flushPendingOrders(): Promise<number> {
+  for (const pending of listPendingOrders()) {
+    try {
+      await placeOrder(pending.orderId, pending.prefix, pending.items);
+    } catch {
+      // まだオフライン。次回に持ち越す。
+    }
+  }
+  return listPendingOrders().length;
+}
+
+function orderTotalFromNewItems(items: NewOrderItem[]): number {
+  return items.reduce((sum, item) => sum + item.price * item.qty, 0);
 }
 
 export async function updateOrderStatus(id: string, status: OrderStatus): Promise<void> {

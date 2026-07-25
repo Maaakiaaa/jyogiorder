@@ -5,6 +5,7 @@ import { fetchMenuItems } from "@/lib/menu";
 import { NewOrderItem, placeOrder } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { createOrderId } from "@/lib/qr";
+import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import { MenuItem, Order } from "@/types";
 
 type BCartItem = {
@@ -19,6 +20,7 @@ export default function PosBPage() {
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [nextNumber, setNextNumber] = useState("-");
+  const pendingSyncCount = usePendingSync();
 
   useEffect(() => {
     fetchMenuItems()
@@ -88,6 +90,11 @@ export default function PosBPage() {
           <h1 className="neon-title mt-2 text-2xl font-black">B端末（店頭）</h1>
           <p className="mt-2 text-sm text-slate-300">その場で品目を選び、会計と同時に番号を発行します。</p>
           <p className="mt-1 text-xs text-cyan-200/70">次に発行される番号: {nextNumber}</p>
+          {pendingSyncCount > 0 && (
+            <p className="mt-2 rounded-lg border border-yellow-300/40 bg-yellow-300/10 px-3 py-1.5 text-xs font-bold text-yellow-100">
+              オフライン: 同期待ち {pendingSyncCount}件（このまま操作を続けてください。復帰次第自動送信します）
+            </p>
+          )}
         </header>
 
         {error && (

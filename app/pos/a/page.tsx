@@ -5,6 +5,7 @@ import { fetchMenuItems } from "@/lib/menu";
 import { NewOrderItem, placeOrder } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
+import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import { MenuItem, Order, QrOrderPayload } from "@/types";
 
 type ScannedLineItem = {
@@ -24,6 +25,7 @@ export default function PosAPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [nextNumber, setNextNumber] = useState("-");
+  const pendingSyncCount = usePendingSync();
 
   useEffect(() => {
     fetchMenuItems()
@@ -131,6 +133,11 @@ export default function PosAPage() {
             スキャンは内容の確認だけです。番号は支払い完了ボタンを押した瞬間に発行されます。
           </p>
           <p className="mt-1 text-xs text-cyan-200/70">次に発行される番号: {nextNumber}</p>
+          {pendingSyncCount > 0 && (
+            <p className="mt-2 rounded-lg border border-yellow-300/40 bg-yellow-300/10 px-3 py-1.5 text-xs font-bold text-yellow-100">
+              オフライン: 同期待ち {pendingSyncCount}件（このまま操作を続けてください。復帰次第自動送信します）
+            </p>
+          )}
         </header>
 
         <section className="mt-4 rounded-2xl border border-cyan-300/25 bg-slate-900/65 p-4">
