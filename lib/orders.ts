@@ -214,6 +214,19 @@ export async function fetchActiveOrders(): Promise<Order[]> {
   return attachItems((data ?? []) as OrderRow[]);
 }
 
+// 誤タップでの取消から復帰できるよう、直近の取消済み注文を調理ディスプレイに出す用。
+export async function fetchRecentCancelledOrders(): Promise<Order[]> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("status", "cancelled")
+    .order("updated_at", { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+  return attachItems((data ?? []) as OrderRow[]);
+}
+
 export async function fetchSalesOrders(): Promise<Order[]> {
   const { data, error } = await supabase
     .from("orders")

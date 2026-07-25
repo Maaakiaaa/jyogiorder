@@ -2,20 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Order, OrderStatus } from "@/types";
-import { fetchActiveOrders, updateOrderStatus } from "@/lib/orders";
+import { fetchActiveOrders, fetchRecentCancelledOrders, updateOrderStatus } from "@/lib/orders";
 import { supabase } from "@/lib/supabase";
 import OrderCard from "@/app/components/kitchen/OrderCard";
 
 export default function KitchenPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
   const load = useCallback(async () => {
     try {
-      const data = await fetchActiveOrders();
-      setOrders(data);
+      const [active, cancelled] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders()]);
+      setOrders(active);
+      setCancelledOrders(cancelled);
     } catch {
       // silent
     } finally {
@@ -75,6 +77,10 @@ export default function KitchenPage() {
     void transition(id, "cancelled");
   }
 
+  function handleRestore(id: string) {
+    void transition(id, "received");
+  }
+
   const kitchenOrders = orders.filter((o) => o.status === "received" || o.status === "cooking");
 
   return (
@@ -111,6 +117,32 @@ export default function KitchenPage() {
             />
           ))}
         </div>
+
+        {cancelledOrders.length > 0 && (
+          <div className="mt-6">
+            <p className="mb-3 text-sm font-bold text-slate-500">取消済み（誤タップの場合はここから戻せます）</p>
+            <div className="space-y-2">
+              {cancelledOrders.map((order) => (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between rounded-xl border border-fuchsia-300/40 bg-fuchsia-50 px-4 py-3"
+                >
+                  <div>
+                    <p className="text-sm font-black text-slate-700">番号 {order.number}</p>
+                    <p className="text-xs text-slate-500">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
+                  </div>
+                  <button
+                    disabled={updating === order.id}
+                    onClick={() => handleRestore(order.id)}
+                    className="rounded-lg border border-cyan-300/60 bg-white px-3 py-2 text-xs font-black text-cyan-700 disabled:opacity-40"
+                  >
+                    {updating === order.id ? "..." : "取消を戻す"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
