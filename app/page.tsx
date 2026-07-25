@@ -10,6 +10,7 @@ import { fetchMenuItems } from "@/lib/menu";
 import { fetchOrder } from "@/lib/orders";
 import { createOrderId } from "@/lib/qr";
 import { supabase } from "@/lib/supabase";
+import { loadCustomerSession, saveCustomerSession } from "@/lib/customerSession";
 import { CartItem, MenuItem, Order } from "@/types";
 
 type CustomerStep = "menu" | "checkout" | "waiting" | "welcome";
@@ -23,8 +24,52 @@ export default function Home() {
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [sessionRestored, setSessionRestored] = useState(false);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.menuItem.price * item.qty, 0);
+
+  // リロード対策: 支払い確定済み(まだ受け渡し済みでない)の注文IDだけをlocalStorageに
+  // 退避しておき、再訪時にDBの最新状態で復元する。カート・QR提示中の状態はここでは
+  // 復元しない(何も確定していないため、最初からやり直しても実害がない)。
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restore() {
+      const session = loadCustomerSession();
+      if (session.orderIds.length === 0) {
+        setSessionRestored(true);
+        return;
+      }
+
+      const fetched = await Promise.all(session.orderIds.map((id) => fetchOrder(id)));
+      if (cancelled) return;
+
+      const restoredOrders = fetched.filter(
+        (order): order is Order => order !== null && order.status !== "handed"
+      );
+
+      if (restoredOrders.length > 0) {
+        setOrders(restoredOrders);
+        const activeId = restoredOrders.some((o) => o.id === session.activeOrderId)
+          ? session.activeOrderId
+          : restoredOrders[restoredOrders.length - 1].id;
+        setActiveOrderId(activeId);
+        setStep("waiting");
+      }
+
+      setSessionRestored(true);
+    }
+
+    void restore();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sessionRestored) return;
+    saveCustomerSession(orders.map((order) => order.id), activeOrderId);
+  }, [sessionRestored, orders, activeOrderId]);
 
   useEffect(() => {
     let cancelled = false;
