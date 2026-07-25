@@ -13,8 +13,19 @@ interface Props {
   onBack: () => void;
 }
 
+// この秒数を過ぎてもレジでスキャンされない場合、通信不良や読み取り失敗を疑ってもらうための目安。
+const TIMEOUT_HINT_MS = 45000;
+
 export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
   const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [showTimeoutHint, setShowTimeoutHint] = useState(false);
+
+  useEffect(() => {
+    // orderIdはCheckoutPanelがマウントされている間ずっと同じ値のまま(親が別のstepへ
+    // 遷移すると、このコンポーネント自体がアンマウントされるため)。初期値のfalseで足りる。
+    const timer = setTimeout(() => setShowTimeoutHint(true), TIMEOUT_HINT_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const qrPayload = useMemo<QrOrderPayload>(
     () => ({
@@ -77,6 +88,12 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
           </div>
         )}
       </div>
+
+      {showTimeoutHint && (
+        <div className="mt-4 rounded-2xl border border-yellow-300/40 bg-yellow-300/10 px-4 py-3 text-sm text-yellow-100">
+          反応がない場合は、通信状況によりレジ側に届いていない可能性があります。レジで番号をご確認ください。
+        </div>
+      )}
 
       <div className="mt-4 rounded-2xl border border-cyan-300/25 bg-slate-950/60 p-4">
         <p className="mb-3 text-sm font-bold uppercase tracking-[0.16em] text-cyan-200/80">注文内容</p>
