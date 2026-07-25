@@ -91,19 +91,29 @@ alter table orders enable row level security;
 alter table order_items enable row level security;
 alter table push_subscriptions enable row level security;
 
+drop policy if exists "categories_select" on categories;
 create policy "categories_select" on categories for select to anon, authenticated using (true);
 
+drop policy if exists "menu_items_select" on menu_items;
 create policy "menu_items_select" on menu_items for select to anon, authenticated using (true);
+drop policy if exists "menu_items_insert" on menu_items;
 create policy "menu_items_insert" on menu_items for insert to anon, authenticated with check (true);
+drop policy if exists "menu_items_update" on menu_items;
 create policy "menu_items_update" on menu_items for update to anon, authenticated using (true) with check (true);
 
+drop policy if exists "orders_select" on orders;
 create policy "orders_select" on orders for select to anon, authenticated using (true);
+drop policy if exists "orders_insert" on orders;
 create policy "orders_insert" on orders for insert to anon, authenticated with check (true);
+drop policy if exists "orders_update" on orders;
 create policy "orders_update" on orders for update to anon, authenticated using (true) with check (true);
 
+drop policy if exists "order_items_select" on order_items;
 create policy "order_items_select" on order_items for select to anon, authenticated using (true);
+drop policy if exists "order_items_insert" on order_items;
 create policy "order_items_insert" on order_items for insert to anon, authenticated with check (true);
 
+drop policy if exists "push_subscriptions_insert" on push_subscriptions;
 create policy "push_subscriptions_insert" on push_subscriptions for insert to anon, authenticated with check (true);
 
 -- 初期メニュー(既存 lib/menu.ts のハードコード値を移植)
