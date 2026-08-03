@@ -40,7 +40,7 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
       .order("sort_order", { ascending: true });
 
     if (error) {
-      console.error("Menu fetch error:", error);
+      console.error("Menu fetch error:", error.message, error.details, error.hint, error.code);
       return MENU_ITEMS;
     }
 
