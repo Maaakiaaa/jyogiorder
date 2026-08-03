@@ -221,13 +221,13 @@ export default function Home() {
   return (
     <main className="festival-bg min-h-screen px-3 py-3">
       <div className="glass-panel relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md flex-col overflow-hidden rounded-[28px]">
-        <header className="border-b border-line px-4 py-4">
+        <header className="bg-gradient-to-r from-brand-indigo to-brand-vermilion px-4 py-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-sub">
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/80">
                 TACHIBANASAI
               </p>
-              <h1 className="neon-title mt-2 text-2xl text-ink">MOBA JYOGI</h1>
+              <h1 className="neon-title mt-2 text-2xl text-white">MOBA JYOGI</h1>
             </div>
           </div>
         </header>
