@@ -66,13 +66,13 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
 
   return (
     <div className="flex h-full flex-col px-4 py-4">
-      <div className="rounded-2xl border border-cyan-300/30 bg-slate-900/65 p-4 text-center">
-        <p className="text-sm font-bold uppercase tracking-[0.16em] text-cyan-200/80">Checkout QR</p>
-        <h2 className="mt-2 text-xl font-black text-white">レジで読み取ってください</h2>
-        <p className="mt-2 text-sm text-slate-300">これはまだ注文ではありません。会計時にレジで番号が発行されます。</p>
+      <div className="rounded-2xl border border-line bg-canvas p-4 text-center">
+        <p className="text-sm font-bold uppercase tracking-[0.16em] text-sub">Checkout QR</p>
+        <h2 className="mt-2 text-xl font-black text-ink">レジで読み取ってください</h2>
+        <p className="mt-2 text-sm text-sub">これはまだ注文ではありません。会計時にレジで番号が発行されます。</p>
       </div>
 
-      <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-2xl border border-fuchsia-300/30 bg-slate-900/60 p-4">
+      <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-2xl border border-line bg-surface p-4">
         {qrCodeUrl ? (
           <Image
             src={qrCodeUrl}
@@ -83,23 +83,23 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
             className="w-full max-w-[320px] rounded-lg bg-white p-3"
           />
         ) : (
-          <div className="flex h-[320px] w-full max-w-[320px] items-center justify-center rounded-lg bg-slate-950/70 text-sm text-slate-400">
+          <div className="flex h-[320px] w-full max-w-[320px] items-center justify-center rounded-lg bg-canvas text-sm text-sub">
             QRコードを生成中...
           </div>
         )}
       </div>
 
       {showTimeoutHint && (
-        <div className="mt-4 rounded-2xl border border-yellow-300/40 bg-yellow-300/10 px-4 py-3 text-sm text-yellow-100">
+        <div className="mt-4 rounded-2xl border border-brand-gold/40 bg-brand-gold/10 px-4 py-3 text-sm text-brand-gold">
           反応がない場合は、通信状況によりレジ側に届いていない可能性があります。レジで番号をご確認ください。
         </div>
       )}
 
-      <div className="mt-4 rounded-2xl border border-cyan-300/25 bg-slate-950/60 p-4">
-        <p className="mb-3 text-sm font-bold uppercase tracking-[0.16em] text-cyan-200/80">注文内容</p>
+      <div className="mt-4 rounded-2xl border border-line bg-canvas p-4">
+        <p className="mb-3 text-sm font-bold uppercase tracking-[0.16em] text-sub">注文内容</p>
         <div className="space-y-2">
           {cart.map((item) => (
-            <div key={item.menuItem.id} className="flex items-center justify-between text-sm text-slate-100">
+            <div key={item.menuItem.id} className="flex items-center justify-between text-sm text-ink">
               <span>
                 {item.menuItem.name} x {item.qty}
               </span>
@@ -107,15 +107,15 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
             </div>
           ))}
         </div>
-        <div className="mt-3 flex items-center justify-between border-t border-slate-700 pt-3">
-          <span className="text-sm font-bold text-fuchsia-200">TOTAL</span>
-          <span className="text-xl font-black text-white">¥{total.toLocaleString()}</span>
+        <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+          <span className="text-sm font-bold text-sub">TOTAL</span>
+          <span className="text-xl font-black text-ink">¥{total.toLocaleString()}</span>
         </div>
       </div>
 
       <button
         onClick={onBack}
-        className="mt-4 rounded-2xl border border-slate-300/40 px-4 py-4 text-sm font-bold text-slate-200"
+        className="mt-4 rounded-2xl border border-line px-4 py-4 text-sm font-bold text-sub"
       >
         カートに戻る
       </button>

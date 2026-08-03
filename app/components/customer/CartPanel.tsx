@@ -12,10 +12,10 @@ interface Props {
 export default function CartPanel({ cart, total, onChangeQty, onShowQr }: Props) {
   if (cart.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-24 text-slate-300">
+      <div className="flex flex-col items-center justify-center py-24 text-sub">
         <p className="text-6xl">🛒</p>
-        <p className="mt-3 text-base font-bold">カートは空です</p>
-        <p className="mt-1 text-sm text-slate-400">メニューから追加してください</p>
+        <p className="mt-3 text-base font-bold text-ink">カートは空です</p>
+        <p className="mt-1 text-sm text-sub">メニューから追加してください</p>
       </div>
     );
   }
@@ -29,20 +29,20 @@ export default function CartPanel({ cart, total, onChangeQty, onShowQr }: Props)
             className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3"
           >
             <div>
-              <p className="font-bold text-slate-100">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{c.menuItem.name}</p>
-              <p className="mt-1 text-sm text-cyan-200">¥{c.menuItem.price} x {c.qty}</p>
+              <p className="font-bold text-ink">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{c.menuItem.name}</p>
+              <p className="mt-1 text-sm text-sub">¥{c.menuItem.price} x {c.qty}</p>
             </div>
-            <div className="flex items-center gap-2 rounded-full bg-slate-950/70 px-2 py-1">
+            <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
               <button
                 onClick={() => onChangeQty(c.menuItem.id, -1)}
-                className="h-11 w-11 rounded-full border border-cyan-300/45 text-xl font-bold text-cyan-200"
+                className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
               >
                 −
               </button>
-              <span className="w-8 text-center text-sm font-black text-slate-100">{c.qty}</span>
+              <span className="w-8 text-center text-sm font-black text-ink">{c.qty}</span>
               <button
                 onClick={() => onChangeQty(c.menuItem.id, 1)}
-                className="h-[3.25rem] w-[3.25rem] rounded-full border border-cyan-300/45 text-2xl font-bold text-cyan-200"
+                className="h-[3.25rem] w-[3.25rem] rounded-full border border-line text-2xl font-bold text-brand-indigo"
               >
                 +
               </button>
@@ -51,10 +51,10 @@ export default function CartPanel({ cart, total, onChangeQty, onShowQr }: Props)
         ))}
       </div>
 
-      <div className="border-t border-cyan-300/20 bg-slate-950/70 px-4 py-4">
-        <div className="mb-3 flex items-center justify-between rounded-xl border border-fuchsia-300/30 bg-slate-900/70 px-4 py-3">
-          <span className="text-sm font-bold text-fuchsia-200">TOTAL</span>
-          <span className="text-2xl font-black text-white">¥{total.toLocaleString()}</span>
+      <div className="border-t border-line bg-surface px-4 py-4">
+        <div className="mb-3 flex items-center justify-between rounded-xl border border-line bg-canvas px-4 py-3">
+          <span className="text-sm font-bold text-sub">TOTAL</span>
+          <span className="text-2xl font-black text-ink">¥{total.toLocaleString()}</span>
         </div>
 
         <button

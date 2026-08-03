@@ -87,8 +87,8 @@ export default function KitchenPage() {
     <main className="min-h-screen bg-slate-100 px-3 py-3">
       <div className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
-          <h1 className="neon-title text-2xl font-black">調理ディスプレイ</h1>
-          <button onClick={load} className="rounded-xl border border-cyan-300/40 px-3 py-2 text-sm font-bold text-cyan-100">
+          <h1 className="neon-title text-2xl text-ink">調理ディスプレイ</h1>
+          <button onClick={load} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-brand-indigo">
             更新
           </button>
         </div>
@@ -125,16 +125,16 @@ export default function KitchenPage() {
               {cancelledOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="flex items-center justify-between rounded-xl border border-fuchsia-300/40 bg-fuchsia-50 px-4 py-3"
+                  className="flex items-center justify-between rounded-xl border border-brand-vermilion/30 bg-brand-vermilion/5 px-4 py-3"
                 >
                   <div>
-                    <p className="text-sm font-black text-slate-700">番号 {order.number}</p>
-                    <p className="text-xs text-slate-500">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
+                    <p className="text-sm font-black text-ink">番号 {order.number}</p>
+                    <p className="text-xs text-sub">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
                   </div>
                   <button
                     disabled={updating === order.id}
                     onClick={() => handleRestore(order.id)}
-                    className="rounded-lg border border-cyan-300/60 bg-white px-3 py-2 text-xs font-black text-cyan-700 disabled:opacity-40"
+                    className="rounded-lg border border-line bg-white px-3 py-2 text-xs font-black text-brand-indigo disabled:opacity-40"
                   >
                     {updating === order.id ? "..." : "取消を戻す"}
                   </button>

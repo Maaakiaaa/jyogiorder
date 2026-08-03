@@ -250,12 +250,12 @@ export default function AdminPage() {
 
   if (!authed) {
     return (
-      <main className="min-h-screen bg-white px-3 py-3">
-        <div className="mx-auto flex min-h-[95vh] w-full max-w-md items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="w-full rounded-3xl border border-slate-200 bg-white p-6">
+      <main className="min-h-screen bg-canvas px-3 py-3">
+        <div className="mx-auto flex min-h-[95vh] w-full max-w-md items-center justify-center rounded-2xl border border-line bg-surface p-5 shadow-sm">
+          <div className="w-full rounded-3xl border border-line bg-surface p-6">
             <p className="text-center text-4xl">🔐</p>
-            <h1 className="neon-title mt-2 text-center text-2xl font-black">ADMIN LOGIN</h1>
-            <p className="mt-2 text-center text-xs text-slate-300">管理パスワードを入力してください</p>
+            <h1 className="neon-title mt-2 text-center text-2xl text-ink">ADMIN LOGIN</h1>
+            <p className="mt-2 text-center text-xs text-sub">管理パスワードを入力してください</p>
 
             <input
               type="password"
@@ -266,13 +266,13 @@ export default function AdminPage() {
               }}
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
               placeholder="Password"
-              className={`mt-5 w-full rounded-xl border bg-slate-950/70 px-4 py-3 text-sm outline-none ${
-                error ? "border-rose-300/70 text-rose-100" : "border-cyan-300/40 text-cyan-100"
+              className={`mt-5 w-full rounded-xl border bg-canvas px-4 py-3 text-sm outline-none ${
+                error ? "border-rose-400 text-rose-700" : "border-line text-ink"
               }`}
               autoFocus
             />
 
-            {error && <p className="mt-2 text-center text-xs text-rose-300">パスワードが違います</p>}
+            {error && <p className="mt-2 text-center text-xs text-rose-600">パスワードが違います</p>}
 
             <button onClick={handleLogin} className="neon-button mt-5 w-full rounded-xl py-4 text-base font-black">
               ログイン
@@ -284,48 +284,48 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 px-3 py-3">
-      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <main className="min-h-screen bg-canvas px-3 py-3">
+      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-line bg-surface p-5 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <h1 className="neon-title text-2xl font-black">管理画面</h1>
+            <h1 className="neon-title text-2xl text-ink">管理画面</h1>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setAdminTab("menu")}
-              className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
+              className={`rounded-xl border px-3 py-2 text-sm font-bold transition ${
                 adminTab === "menu"
-                  ? "border-emerald-300/40 bg-emerald-300/15 text-emerald-100"
-                  : "border-slate-300/30 text-slate-300"
+                  ? "border-brand-indigo/40 bg-brand-indigo/10 text-brand-indigo"
+                  : "border-line text-sub"
               }`}
             >
               ⚙️ 商品管理
             </button>
             <button
               onClick={() => setAdminTab("sales")}
-              className={`rounded-xl px-3 py-2 text-sm font-bold transition ${
+              className={`rounded-xl border px-3 py-2 text-sm font-bold transition ${
                 adminTab === "sales"
-                  ? "border-yellow-300/40 bg-yellow-300/15 text-yellow-100"
-                  : "border-slate-300/30 text-slate-300"
+                  ? "border-brand-gold/40 bg-brand-gold/10 text-brand-gold"
+                  : "border-line text-sub"
               }`}
             >
               📈 販売実績
             </button>
-            <button onClick={handleLogout} className="rounded-xl border border-fuchsia-300/40 px-3 py-2 text-sm font-bold text-fuchsia-100">
+            <button onClick={handleLogout} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-brand-vermilion">
               ログアウト
             </button>
           </div>
         </div>
 
-        {loading && <div className="py-16 text-center text-slate-300">読み込み中...</div>}
+        {loading && <div className="py-16 text-center text-sub">読み込み中...</div>}
 
         {/* 販売実績タブ */}
         {adminTab === "sales" && (
           <div className="space-y-3">
-            <section className="rounded-2xl border border-cyan-300/25 bg-slate-900/65 p-4">
+            <section className="rounded-2xl border border-line bg-canvas p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-base font-black text-white">販売実績</p>
-                <p className="text-xs font-bold text-cyan-200">
+                <p className="text-base font-black text-ink">販売実績</p>
+                <p className="text-xs font-bold text-brand-indigo">
                   {totalSoldCount}個 / ¥{totalSalesAmount.toLocaleString()}
                 </p>
               </div>
@@ -335,17 +335,17 @@ export default function AdminPage() {
                   productSales.map((item) => (
                     <div
                       key={item.name}
-                      className="flex items-center justify-between rounded-xl border border-cyan-300/20 bg-slate-950/55 px-3 py-2"
+                      className="flex items-center justify-between rounded-xl border border-line bg-surface px-3 py-2"
                     >
-                      <p className="text-sm font-bold text-white">{item.name}</p>
+                      <p className="text-sm font-bold text-ink">{item.name}</p>
                       <div className="text-right">
-                        <p className="text-sm font-black text-cyan-100">{item.qty}個</p>
-                        <p className="text-xs text-slate-300">¥{item.amount.toLocaleString()}</p>
+                        <p className="text-sm font-black text-brand-indigo">{item.qty}個</p>
+                        <p className="text-xs text-sub">¥{item.amount.toLocaleString()}</p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-xl border border-cyan-300/20 bg-slate-950/55 px-3 py-4 text-center text-sm text-slate-300">
+                  <div className="rounded-xl border border-line bg-surface px-3 py-4 text-center text-sm text-sub">
                     まだ販売実績はありません
                   </div>
                 )}
@@ -357,12 +357,12 @@ export default function AdminPage() {
         {/* 商品管理タブ */}
         {adminTab === "menu" && (
           <div className="space-y-3">
-            <section className="rounded-2xl border border-emerald-300/30 bg-slate-900/65 p-4">
+            <section className="rounded-2xl border border-line bg-canvas p-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-base font-black text-white">新しい商品を追加</p>
+                <p className="text-base font-black text-ink">新しい商品を追加</p>
                 <button
                   onClick={() => setIsCreateMenuFormOpen((prev) => !prev)}
-                  className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-4 py-2 text-sm font-bold text-emerald-100"
+                  className="rounded-lg border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo"
                 >
                   {isCreateMenuFormOpen ? "閉じる" : "商品を追加する"}
                 </button>
@@ -375,7 +375,7 @@ export default function AdminPage() {
                     value={newMenuName}
                     onChange={(e) => setNewMenuName(e.target.value)}
                     placeholder="商品名"
-                    className="rounded-lg border border-cyan-300/40 bg-slate-950/70 px-3 py-2 text-sm text-cyan-100 outline-none"
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
                     autoFocus
                   />
                   <input
@@ -383,12 +383,12 @@ export default function AdminPage() {
                     value={newMenuPrice}
                     onChange={(e) => setNewMenuPrice(e.target.value)}
                     placeholder="価格"
-                    className="rounded-lg border border-cyan-300/40 bg-slate-950/70 px-3 py-2 text-sm text-cyan-100 outline-none"
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
                   />
                   <button
                     onClick={handleCreateMenuItem}
                     disabled={isCreatingMenuItem}
-                    className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-4 py-2 text-sm font-bold text-emerald-100 disabled:opacity-50"
+                    className="rounded-lg border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo disabled:opacity-50"
                   >
                     {isCreatingMenuItem ? "追加中..." : "追加"}
                   </button>
@@ -398,7 +398,7 @@ export default function AdminPage() {
                       setNewMenuName("");
                       setNewMenuPrice("");
                     }}
-                    className="rounded-lg border border-slate-300/40 px-4 py-2 text-sm font-bold text-slate-300"
+                    className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-sub"
                   >
                     キャンセル
                   </button>
@@ -408,10 +408,10 @@ export default function AdminPage() {
             {menu.map((item) => (
               <article key={item.id} className={`rounded-2xl border p-4 transition ${
                 !item.isActive
-                  ? "border-slate-400/40 bg-slate-500/10 opacity-60"
+                  ? "border-line bg-canvas opacity-60"
                   : !item.isAvailable
-                    ? "border-fuchsia-300/40 bg-fuchsia-300/10"
-                    : "border-cyan-300/25 bg-slate-900/65"
+                    ? "border-brand-vermilion/30 bg-brand-vermilion/5"
+                    : "border-line bg-surface"
               }`}>
                 <div className="mb-3 flex items-center justify-between">
                   <div>
@@ -421,14 +421,14 @@ export default function AdminPage() {
                           type="text"
                           value={editingName}
                           onChange={(e) => setEditingName(e.target.value)}
-                          className="rounded-lg border border-cyan-300/40 bg-slate-950/70 px-3 py-1.5 text-sm font-bold text-cyan-100 outline-none"
+                          className="rounded-lg border border-line bg-canvas px-3 py-1.5 text-sm font-bold text-ink outline-none"
                           autoFocus
                         />
                       </div>
                     ) : (
-                      <p className="text-base font-black text-white">
+                      <p className="text-base font-black text-ink">
                         {item.emoji ? `${item.emoji} ` : ""}{item.name}
-                        {!item.isActive && <span className="ml-2 text-xs font-bold text-slate-400">非表示</span>}
+                        {!item.isActive && <span className="ml-2 text-xs font-bold text-sub">非表示</span>}
                       </p>
                     )}
                   </div>
@@ -436,17 +436,17 @@ export default function AdminPage() {
                     <button
                       onClick={() => handleAvailableToggle(item.id, item.isAvailable)}
                       disabled={!item.isActive}
-                      className={`rounded-full px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${
+                      className={`rounded-full border px-4 py-2 text-xs font-bold transition disabled:opacity-40 ${
                         item.isAvailable
-                          ? "border-emerald-300/50 bg-emerald-300/15 text-emerald-100"
-                          : "border-fuchsia-300/50 bg-fuchsia-300/15 text-fuchsia-100"
+                          ? "border-emerald-400/60 bg-emerald-50 text-emerald-700"
+                          : "border-brand-vermilion/50 bg-brand-vermilion/10 text-brand-vermilion"
                       }`}
                     >
                       {item.isAvailable ? "販売中" : "SOLDOUT"}
                     </button>
                     <button
                       onClick={() => handleActiveToggle(item.id, item.isActive)}
-                      className="rounded-full border border-slate-300/50 bg-slate-800/40 px-4 py-2 text-xs font-bold text-slate-200"
+                      className="rounded-full border border-line bg-canvas px-4 py-2 text-xs font-bold text-sub"
                     >
                       {item.isActive ? "削除" : "復元"}
                     </button>
@@ -454,34 +454,34 @@ export default function AdminPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-slate-300">価格:</span>
+                  <span className="text-sm text-sub">価格:</span>
                   {editingMenuId === item.id ? (
                     <div className="flex gap-2">
                       <input
                         type="number"
                         value={editingPrice}
                         onChange={(e) => setEditingPrice(e.target.value)}
-                        className="w-20 rounded-lg border border-cyan-300/40 bg-slate-950/70 px-2 py-1 text-sm text-cyan-100 outline-none"
+                        className="w-20 rounded-lg border border-line bg-canvas px-2 py-1 text-sm text-ink outline-none"
                       />
                       <button
                         onClick={() => handleMenuUpdate(item.id)}
-                        className="rounded-lg border border-emerald-300/40 bg-emerald-300/15 px-3 py-1 text-sm font-bold text-emerald-100"
+                        className="rounded-lg border border-emerald-400/60 bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700"
                       >
                         保存
                       </button>
                       <button
                         onClick={clearMenuEditing}
-                        className="rounded-lg border border-slate-300/40 px-3 py-1 text-sm font-bold text-slate-300"
+                        className="rounded-lg border border-line px-3 py-1 text-sm font-bold text-sub"
                       >
                         キャンセル
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className="text-lg font-black text-cyan-200">¥{item.price}</span>
+                      <span className="text-lg font-black text-brand-indigo">¥{item.price}</span>
                       <button
                         onClick={() => startMenuEditing(item)}
-                        className="rounded-lg border border-cyan-300/40 bg-cyan-300/15 px-3 py-1 text-sm font-bold text-cyan-100"
+                        className="rounded-lg border border-brand-indigo/40 bg-brand-indigo/10 px-3 py-1 text-sm font-bold text-brand-indigo"
                       >
                         編集
                       </button>

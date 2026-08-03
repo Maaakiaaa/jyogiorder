@@ -221,20 +221,20 @@ export default function Home() {
   return (
     <main className="festival-bg min-h-screen px-3 py-3">
       <div className="glass-panel relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md flex-col overflow-hidden rounded-[28px]">
-        <header className="border-b border-cyan-300/30 px-4 py-4">
+        <header className="border-b border-line px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="neon-title text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-200/80">
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-sub">
                 TACHIBANASAI
               </p>
-              <h1 className="neon-title mt-2 text-2xl font-black">MOBA JYOGI</h1>
+              <h1 className="neon-title mt-2 text-2xl text-ink">MOBA JYOGI</h1>
             </div>
           </div>
         </header>
 
         <section className="px-4 pt-4">
-          <div className="rounded-2xl border border-fuchsia-300/30 bg-slate-900/55 p-4 shadow-[0_0_24px_rgba(255,79,207,0.22)]">
-            <p className="mt-2 text-sm text-cyan-100/90">商品を選んでカートへ追加してください。</p>
+          <div className="rounded-2xl border border-line bg-canvas p-4">
+            <p className="text-sm text-sub">商品を選んでカートへ追加してください。</p>
           </div>
         </section>
 
@@ -251,11 +251,11 @@ export default function Home() {
           )}
         </section>
 
-        <nav className="grid grid-cols-3 gap-2 border-t border-cyan-300/20 bg-slate-950/70 px-3 py-4">
+        <nav className="grid grid-cols-3 gap-2 border-t border-line bg-surface px-3 py-4">
           <button
             onClick={() => setActiveTab("menu")}
             className={`rounded-xl px-2 py-[1.3rem] text-xs font-bold transition ${
-              activeTab === "menu" ? "neon-pill bg-cyan-400/10 text-cyan-100" : "text-slate-300"
+              activeTab === "menu" ? "neon-pill bg-brand-indigo/10 text-brand-indigo" : "text-sub"
             }`}
           >
             🍜 MENU
@@ -263,9 +263,7 @@ export default function Home() {
           <button
             onClick={() => setActiveTab("cart")}
             className={`rounded-xl px-2 py-[1.3rem] text-xs font-bold transition ${
-              activeTab === "cart"
-                ? "neon-pill bg-fuchsia-400/10 text-fuchsia-100 glow-pink"
-                : "text-slate-300"
+              activeTab === "cart" ? "neon-pill bg-brand-vermilion/10 text-brand-vermilion" : "text-sub"
             }`}
           >
             🛒 CART
@@ -279,7 +277,7 @@ export default function Home() {
               setStep("waiting");
             }}
             className={`rounded-xl px-2 py-[1.3rem] text-xs font-bold transition ${
-              orders.length > 0 ? "bg-yellow-300/15 text-yellow-100 glow-yellow" : "text-slate-500"
+              orders.length > 0 ? "bg-brand-gold/10 text-brand-gold" : "text-line"
             }`}
           >
             📦 MY ORDERS {orders.length > 0 ? `(${orders.length})` : ""}

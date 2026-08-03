@@ -9,7 +9,7 @@ const ELAPSED_CLASS = {
 } as const;
 
 const CARD_CLASS = {
-  normal: "border-cyan-300/25",
+  normal: "border-line",
   warning: "border-orange-500",
   danger: "border-red-600",
 } as const;
@@ -63,45 +63,43 @@ export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, o
     >
       <div className="relative z-10">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-lg font-black text-slate-900">番号 {order.number}</span>
+          <span className="text-lg font-black text-ink">番号 {order.number}</span>
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-3 py-1 text-xs font-bold ${elapsed.tone}`}>
               経過 {elapsed.label}
             </span>
             <span
               className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                order.status === "received"
-                  ? "text-yellow-700 border-yellow-400/50 bg-white"
-                  : order.status === "cooking"
-                    ? "text-amber-700 border-amber-400/50 bg-white"
-                    : "text-cyan-700 border-blue-400/50 bg-white"
+                order.status === "received" || order.status === "cooking"
+                  ? "text-brand-gold border-brand-gold/50 bg-white"
+                  : "text-brand-indigo border-brand-indigo/40 bg-white"
               }`}
             >
               {STATUS_LABEL[order.status]}
             </span>
           </div>
         </div>
-        <p className="text-sm text-slate-700">{itemsText}</p>
-        <p className="mb-3 mt-1 text-sm font-black text-cyan-700">¥{order.total.toLocaleString()}</p>
+        <p className="text-sm text-ink">{itemsText}</p>
+        <p className="mb-3 mt-1 text-sm font-black text-brand-indigo">¥{order.total.toLocaleString()}</p>
         <div className="grid grid-cols-3 gap-2">
           <button
             disabled={order.status !== "cooking" || isUpdating}
             onClick={() => onBack(order.id)}
-            className="rounded-xl border border-slate-300/70 bg-white py-3 text-sm font-black text-slate-700 disabled:opacity-35"
+            className="rounded-xl border border-line bg-white py-3 text-sm font-black text-sub disabled:opacity-35"
           >
             {isUpdating ? "..." : "戻す"}
           </button>
           <button
             disabled={order.status === "ready" || isUpdating}
             onClick={() => onAdvance(order.id)}
-            className="rounded-xl border border-cyan-300/60 bg-white py-3 text-sm font-black text-cyan-700 disabled:opacity-35"
+            className="rounded-xl border border-brand-indigo/40 bg-white py-3 text-sm font-black text-brand-indigo disabled:opacity-35"
           >
             {isUpdating ? "..." : order.status === "received" ? "調理を始める" : "できあがり"}
           </button>
           <button
             disabled={isUpdating}
             onClick={() => onCancel(order.id)}
-            className="rounded-xl border border-fuchsia-300/60 bg-white py-3 text-sm font-black text-fuchsia-700 disabled:opacity-35"
+            className="rounded-xl border border-brand-vermilion/40 bg-white py-3 text-sm font-black text-brand-vermilion disabled:opacity-35"
           >
             {isUpdating ? "..." : "取消"}
           </button>

@@ -124,24 +124,24 @@ export default function PosAPage() {
   return (
     <main className="festival-bg min-h-screen px-3 py-3">
       <div className="glass-panel relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md flex-col rounded-[28px] p-4">
-        <header className="border-b border-cyan-300/20 pb-4">
-          <p className="neon-title text-[11px] font-bold uppercase tracking-[0.22em] text-cyan-200/80">
+        <header className="border-b border-line pb-4">
+          <p className="neon-title text-[11px] uppercase tracking-[0.22em] text-sub">
             POS · A
           </p>
-          <h1 className="neon-title mt-2 text-2xl font-black">A端末（読み取り）</h1>
-          <p className="mt-2 text-sm text-slate-300">
+          <h1 className="neon-title mt-2 text-2xl text-ink">A端末（読み取り）</h1>
+          <p className="mt-2 text-sm text-sub">
             スキャンは内容の確認だけです。番号は支払い完了ボタンを押した瞬間に発行されます。
           </p>
-          <p className="mt-1 text-xs text-cyan-200/70">次に発行される番号: {nextNumber}</p>
+          <p className="mt-1 text-xs text-sub">次に発行される番号: {nextNumber}</p>
           {pendingSyncCount > 0 && (
-            <p className="mt-2 rounded-lg border border-yellow-300/40 bg-yellow-300/10 px-3 py-1.5 text-xs font-bold text-yellow-100">
+            <p className="mt-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 px-3 py-1.5 text-xs font-bold text-brand-gold">
               オフライン: 同期待ち {pendingSyncCount}件（このまま操作を続けてください。復帰次第自動送信します）
             </p>
           )}
         </header>
 
-        <section className="mt-4 rounded-2xl border border-cyan-300/25 bg-slate-900/65 p-4">
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-cyan-200/80">スキャン入力</p>
+        <section className="mt-4 rounded-2xl border border-line bg-canvas p-4">
+          <p className="text-sm font-bold uppercase tracking-[0.16em] text-sub">スキャン入力</p>
           <form onSubmit={handleImport} className="mt-3 space-y-3">
             <input
               ref={scanInputRef}
@@ -149,7 +149,7 @@ export default function PosAPage() {
               value={rawQrText}
               onChange={(event) => setRawQrText(event.target.value)}
               placeholder="V1O..."
-              className="w-full rounded-xl border border-cyan-300/30 bg-slate-950/70 px-3 py-3 text-sm text-cyan-100 outline-none"
+              className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-sm text-ink outline-none"
               autoCapitalize="characters"
               autoCorrect="off"
               spellCheck={false}
@@ -158,51 +158,51 @@ export default function PosAPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="submit"
-                className="rounded-xl border border-cyan-300/40 bg-cyan-300/12 px-4 py-2 text-sm font-bold text-cyan-100"
+                className="rounded-xl border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo"
               >
                 読み込む
               </button>
               <button
                 type="button"
                 onClick={resetScan}
-                className="rounded-xl border border-fuchsia-300/40 px-4 py-2 text-sm font-bold text-fuchsia-100"
+                className="rounded-xl border border-line px-4 py-2 text-sm font-bold text-sub"
               >
                 リセット
               </button>
             </div>
           </form>
 
-          <p className="mt-3 text-xs text-slate-400">
+          <p className="mt-3 text-xs text-sub">
             バーコードスキャナがEnterを送る設定なら、そのまま読み込みが確定します。
           </p>
         </section>
 
         {scanError && (
-          <div className="mt-4 rounded-2xl border border-rose-300/40 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+          <div className="mt-4 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {scanError}
           </div>
         )}
 
         {confirmedOrder && (
-          <section className="mt-4 rounded-2xl border border-emerald-300/35 bg-emerald-300/10 p-4 text-center">
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-emerald-100/80">
+          <section className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-center">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-emerald-700">
               会計完了・番号発行
             </p>
-            <p className="mt-2 text-5xl font-black text-white">{confirmedOrder.number}</p>
-            <p className="mt-2 text-sm text-emerald-100">この番号で呼び出してください。</p>
+            <p className="mt-2 text-5xl font-black text-ink">{confirmedOrder.number}</p>
+            <p className="mt-2 text-sm text-emerald-700">この番号で呼び出してください。</p>
           </section>
         )}
 
-        <section className="mt-4 flex-1 rounded-2xl border border-cyan-300/25 bg-slate-950/60 p-4">
+        <section className="mt-4 flex-1 rounded-2xl border border-line bg-surface p-4">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-cyan-200/80">読み取り結果</p>
-            <p className="text-sm font-black text-white">¥{total.toLocaleString()}</p>
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-sub">読み取り結果</p>
+            <p className="text-sm font-black text-ink">¥{total.toLocaleString()}</p>
           </div>
 
           {scannedItems.length > 0 ? (
             <div className="space-y-2">
               {scannedItems.map((item) => (
-                <div key={item.menuId} className="flex items-center justify-between text-sm text-slate-100">
+                <div key={item.menuId} className="flex items-center justify-between text-sm text-ink">
                   <span>
                     {item.name} x {item.qty}
                   </span>
@@ -211,13 +211,13 @@ export default function PosAPage() {
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-cyan-300/20 bg-slate-900/50 px-3 py-6 text-center text-sm text-slate-400">
+            <div className="rounded-xl border border-line bg-canvas px-3 py-6 text-center text-sm text-sub">
               まだQRを読み取っていません
             </div>
           )}
 
           {hasMissingItems && (
-            <p className="mt-3 text-sm text-yellow-200">
+            <p className="mt-3 text-sm text-brand-vermilion">
               QR内の商品IDに対応する商品が見つからないため、番号発行はできません。
             </p>
           )}
