@@ -143,8 +143,23 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
         </div>
 
         <div className="mt-5 rounded-2xl border border-cyan-300/35 bg-slate-950/70 p-4">
-          <p className="text-sm text-slate-300">呼び出し番号</p>
-          <p className="neon-title mt-2 text-6xl font-black text-cyan-200">{currentOrder.number}</p>
+          <div className="text-center">
+            <p className="text-sm text-slate-300">呼び出し番号</p>
+            <p className="neon-title mt-2 text-6xl font-black text-cyan-200">{currentOrder.number}</p>
+          </div>
+
+          <div className="mt-4 space-y-1 border-t border-cyan-300/20 pt-4">
+            {currentOrder.items.map((item, i) => (
+              <div key={i} className="flex justify-between text-sm text-slate-200">
+                <span>{item.name} x {item.qty}</span>
+                <span>¥{(item.price * item.qty).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-between border-t border-slate-700 pt-3 text-base font-black text-white">
+            <span>TOTAL</span>
+            <span>¥{currentOrder.total.toLocaleString()}</span>
+          </div>
         </div>
 
         <div className="mt-6 rounded-2xl border border-fuchsia-300/30 bg-slate-900/60 p-4">
@@ -168,22 +183,6 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
                 ? "この注文は取り消されました。レジまでお問い合わせください。"
                 : "調理中です。画面は自動更新されます。"}
           </p>
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-cyan-300/25 bg-slate-950/60 p-4">
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-200/80">注文内容</p>
-          <div className="space-y-1">
-            {currentOrder.items.map((item, i) => (
-              <div key={i} className="flex justify-between text-sm text-slate-200">
-                <span>{item.name} x {item.qty}</span>
-                <span>¥{(item.price * item.qty).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex justify-between border-t border-slate-700 pt-3 text-base font-black text-white">
-            <span>TOTAL</span>
-            <span>¥{currentOrder.total.toLocaleString()}</span>
-          </div>
         </div>
       </div>
     </main>
