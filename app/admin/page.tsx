@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import QRCode from "qrcode";
 import { Order, MenuItem, YakitoriFlavor, YakitoriType } from "@/types";
 import { fetchSalesOrders } from "@/lib/orders";
 import {
@@ -16,10 +19,9 @@ import {
 } from "@/lib/menu";
 import { supabase } from "@/lib/supabase";
 import DonutChart from "@/app/components/admin/DonutChart";
+import { ADMIN_PASSWORD, clearAdminAuthed, isAdminAuthed, setAdminAuthed } from "@/lib/adminAuth";
 
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "1234";
-
-type AdminTab = "menu" | "sales";
+type AdminTab = "menu" | "sales" | "staff";
 
 type ProductSales = {
   name: string;
@@ -78,16 +80,17 @@ export default function AdminPage() {
   const [isCreatingMenuItem, setIsCreatingMenuItem] = useState(false);
   const [newFlavorName, setNewFlavorName] = useState("");
   const [newTypeName, setNewTypeName] = useState("");
+  const [staffQrUrl, setStaffQrUrl] = useState("");
 
   useEffect(() => {
-    if (sessionStorage.getItem("admin_authed") === "true") {
+    if (isAdminAuthed()) {
       setAuthed(true);
     }
   }, []);
 
   function handleLogin() {
     if (input === ADMIN_PASSWORD) {
-      sessionStorage.setItem("admin_authed", "true");
+      setAdminAuthed();
       setAuthed(true);
       setError(false);
     } else {
@@ -97,7 +100,7 @@ export default function AdminPage() {
   }
 
   function handleLogout() {
-    sessionStorage.removeItem("admin_authed");
+    clearAdminAuthed();
     setAuthed(false);
     setInput("");
   }
@@ -187,6 +190,26 @@ export default function AdminPage() {
 
     return () => {
       notificationAudioRef.current = null;
+    };
+  }, [authed]);
+
+  // スタッフ用ハブ(/staff)へのQR。設置時に管理者がここから他端末へ共有する。
+  useEffect(() => {
+    if (!authed) return;
+
+    let cancelled = false;
+    const staffUrl = `${window.location.origin}/staff`;
+
+    QRCode.toDataURL(staffUrl, { errorCorrectionLevel: "M", margin: 1, width: 240 })
+      .then((url: string) => {
+        if (!cancelled) setStaffQrUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setStaffQrUrl("");
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, [authed]);
 
@@ -438,6 +461,16 @@ export default function AdminPage() {
             >
               📈 販売実績
             </button>
+            <button
+              onClick={() => setAdminTab("staff")}
+              className={`rounded-xl border px-3 py-2 text-sm font-bold transition ${
+                adminTab === "staff"
+                  ? "border-brand-indigo/40 bg-brand-indigo/10 text-brand-indigo"
+                  : "border-line text-sub"
+              }`}
+            >
+              👥 スタッフ
+            </button>
             <button onClick={handleLogout} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-brand-vermilion">
               ログアウト
             </button>
@@ -503,6 +536,41 @@ export default function AdminPage() {
                 </div>
               </section>
             )}
+          </div>
+        )}
+
+        {/* スタッフタブ */}
+        {adminTab === "staff" && (
+          <div className="space-y-3">
+            <section className="rounded-2xl border border-line bg-canvas p-4 text-center">
+              <p className="text-base font-black text-ink">スタッフ用リンク(/staff)</p>
+              <p className="mt-1 text-xs text-sub">
+                各端末でこのQRを読み取ると、POS・調理ディスプレイ・呼び出しボードなどへのリンク一覧が開きます。
+                設置時に1回スキャンしてホーム画面に追加/ブックマークしておいてもらってください。
+              </p>
+
+              {staffQrUrl ? (
+                <Image
+                  src={staffQrUrl}
+                  alt="スタッフ用リンクQRコード"
+                  width={240}
+                  height={240}
+                  unoptimized
+                  className="mx-auto mt-4 rounded-lg bg-white p-3"
+                />
+              ) : (
+                <div className="mx-auto mt-4 flex h-[240px] w-[240px] items-center justify-center rounded-lg bg-surface text-sm text-sub">
+                  QRコードを生成中...
+                </div>
+              )}
+
+              <Link
+                href="/staff"
+                className="mt-4 inline-block rounded-xl border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo"
+              >
+                この端末でスタッフ画面を開く →
+              </Link>
+            </section>
           </div>
         )}
 
