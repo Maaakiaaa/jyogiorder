@@ -1,8 +1,20 @@
 @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap");
+@import "tailwindcss";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind v4はJSのtailwind.config.tsを自動では読み込まない(要@config指定)。
+   このプロジェクトはv3時代のtheme.extend.colorsをずっと書いていたが未反映のまま
+   だったため、v4の作法である@themeでの登録に切り替える。 */
+@theme {
+  --color-ink: #1b2027;
+  --color-sub: #5b6472;
+  --color-line: #d6dce2;
+  --color-surface: #ffffff;
+  --color-canvas: #e7ebee;
+  --color-brand-indigo: #23406e;
+  --color-brand-indigo-dark: #16294a;
+  --color-brand-vermilion: #e4572e;
+  --color-brand-gold: #c88a1a;
+}
 
 :root {
   --bg: #e7ebee;
@@ -10,6 +22,9 @@
   --ink: #1b2027;
   --sub: #5b6472;
   --line: #d6dce2;
+  --brand-indigo: #23406e;
+  --brand-indigo-dark: #16294a;
+  --brand-gold: #c88a1a;
 }
 
 html,
@@ -48,8 +63,9 @@ body {
 }
 
 .neon-button {
-  background: var(--ink);
+  background: var(--brand-indigo);
   color: #ffffff;
+  box-shadow: inset 0 -3px 0 rgba(200, 138, 26, 0.55);
   transition:
     transform 0.15s ease,
     opacity 0.15s ease;
@@ -108,7 +124,7 @@ body {
 }
 
 .liquid-progress {
-  background: var(--ink);
+  background: linear-gradient(90deg, var(--brand-indigo), var(--brand-gold));
 }
 
 /* ネオングロー廃止。互換のためクラス名だけ残し、視覚効果は無効化する。 */
