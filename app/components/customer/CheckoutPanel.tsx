@@ -34,6 +34,10 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
       items: cart.map((item) => ({
         menuId: item.menuItem.id,
         qty: item.qty,
+        yakitoriSelections: item.yakitoriSelections?.map((s) => ({
+          flavorId: s.flavorId,
+          typeId: s.typeId,
+        })),
       })),
     }),
     [cart, orderId]
@@ -99,9 +103,14 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
         <p className="mb-3 text-sm font-bold uppercase tracking-[0.16em] text-sub">注文内容</p>
         <div className="space-y-2">
           {cart.map((item) => (
-            <div key={item.menuItem.id} className="flex items-center justify-between text-sm text-ink">
+            <div key={item.lineId ?? item.menuItem.id} className="flex items-start justify-between text-sm text-ink">
               <span>
                 {item.menuItem.name} x {item.qty}
+                {item.yakitoriSelections && (
+                  <span className="block text-xs text-sub">
+                    {item.yakitoriSelections.map((s, i) => `${i + 1}.${s.typeName}×${s.flavorName}`).join("、")}
+                  </span>
+                )}
               </span>
               <span>¥{(item.menuItem.price * item.qty).toLocaleString()}</span>
             </div>

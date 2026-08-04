@@ -53,7 +53,6 @@ function formatElapsedTime(createdAt: string, now: number) {
 }
 
 export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, onCancel }: Props) {
-  const itemsText = order.items.map((i) => `${i.name} x ${i.qty}`).join("、");
   const elapsed = formatElapsedTime(order.created_at, now);
 
   return (
@@ -79,7 +78,18 @@ export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, o
             </span>
           </div>
         </div>
-        <p className="text-sm text-ink">{itemsText}</p>
+        <div className="space-y-1">
+          {order.items.map((i, idx) => (
+            <p key={idx} className="text-sm text-ink">
+              {i.name} x {i.qty}
+              {i.yakitoriSelections && (
+                <span className="block text-xs text-sub">
+                  {i.yakitoriSelections.map((s, si) => `${si + 1}.${s.typeName}×${s.flavorName}`).join("、")}
+                </span>
+              )}
+            </p>
+          ))}
+        </div>
         <p className="mb-3 mt-1 text-sm font-black text-brand-indigo">¥{order.total.toLocaleString()}</p>
         <div className="grid grid-cols-3 gap-2">
           <button

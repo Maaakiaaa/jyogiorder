@@ -7,7 +7,7 @@ import {
   pendingOrderToOrder,
   removePendingOrder,
 } from "./offlineQueue";
-import { Order, OrderItem, OrderPrefix, OrderStatus } from "@/types";
+import { Order, OrderItem, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
 
 type OrderRow = {
   id: string;
@@ -26,6 +26,7 @@ type OrderItemRow = {
   name_snapshot: string;
   price_snapshot: number;
   qty: number;
+  yakitori_selections: OrderItemYakitoriSelection[] | null;
 };
 
 function fromRows(order: OrderRow, items: OrderItemRow[]): Order {
@@ -43,6 +44,7 @@ function fromRows(order: OrderRow, items: OrderItemRow[]): Order {
       name: item.name_snapshot,
       price: item.price_snapshot,
       qty: item.qty,
+      yakitoriSelections: item.yakitori_selections ?? undefined,
     })),
   };
 }
@@ -62,6 +64,7 @@ export type NewOrderItem = {
   name: string;
   price: number;
   qty: number;
+  yakitoriSelections?: OrderItemYakitoriSelection[];
 };
 
 // fetchOrder()はUI側のポーリング用に「取得できなければnull」という緩い契約にしているため、
@@ -141,6 +144,7 @@ export async function placeOrder(
         name_snapshot: item.name,
         price_snapshot: item.price,
         qty: item.qty,
+        yakitori_selections: item.yakitoriSelections ?? null,
       }))
     );
 

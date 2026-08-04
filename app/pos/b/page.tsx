@@ -1,20 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchMenuItems } from "@/lib/menu";
+import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes } from "@/lib/menu";
 import { NewOrderItem, placeOrder } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { createOrderId } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
-import { MenuItem, Order } from "@/types";
+import YakitoriSetModal from "@/app/components/shared/YakitoriSetModal";
+import { MenuItem, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 
 type BCartItem = {
   menuItem: MenuItem;
   qty: number;
+  lineId?: string;
+  yakitoriSelections?: YakitoriSkewerSelection[];
 };
 
 export default function PosBPage() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
+  const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
+  const [setModalItem, setSetModalItem] = useState<MenuItem | null>(null);
   const [cart, setCart] = useState<BCartItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
@@ -23,8 +29,12 @@ export default function PosBPage() {
   const pendingSyncCount = usePendingSync();
 
   useEffect(() => {
-    fetchMenuItems()
-      .then((items) => setMenu(items))
+    Promise.all([fetchMenuItems(), fetchYakitoriFlavors(), fetchYakitoriTypes()])
+      .then(([items, flavors, types]) => {
+        setMenu(items);
+        setYakitoriFlavors(flavors);
+        setYakitoriTypes(types);
+      })
       .catch(() => setError("メニュー情報の取得に失敗しました"));
   }, []);
 
@@ -39,22 +49,45 @@ export default function PosBPage() {
 
   function addItem(menuItem: MenuItem) {
     setConfirmedOrder(null);
+
+    if (menuItem.isYakitoriSet) {
+      setSetModalItem(menuItem);
+      return;
+    }
+
     setCart((prev) => {
-      const existing = prev.find((item) => item.menuItem.id === menuItem.id);
+      const existing = prev.find((item) => item.menuItem.id === menuItem.id && !item.yakitoriSelections);
       if (existing) {
         return prev.map((item) =>
-          item.menuItem.id === menuItem.id ? { ...item, qty: item.qty + 1 } : item
+          item === existing ? { ...item, qty: item.qty + 1 } : item
         );
       }
       return [...prev, { menuItem, qty: 1 }];
     });
   }
 
+  function addYakitoriSetToCart(menuItem: MenuItem, selections: YakitoriSkewerSelection[]) {
+    setConfirmedOrder(null);
+    setCart((prev) => [
+      ...prev,
+      { menuItem, qty: 1, lineId: crypto.randomUUID(), yakitoriSelections: selections },
+    ]);
+    setSetModalItem(null);
+  }
+
+  function removeYakitoriSetFromCart(lineId: string) {
+    setCart((prev) => prev.filter((item) => item.lineId !== lineId));
+  }
+
   function changeQty(menuItemId: number, delta: number) {
     setCart((prev) =>
       prev
-        .map((item) => (item.menuItem.id === menuItemId ? { ...item, qty: item.qty + delta } : item))
-        .filter((item) => item.qty > 0)
+        .map((item) =>
+          item.menuItem.id === menuItemId && !item.yakitoriSelections
+            ? { ...item, qty: item.qty + delta }
+            : item
+        )
+        .filter((item) => item.yakitoriSelections || item.qty > 0)
     );
   }
 
@@ -69,6 +102,10 @@ export default function PosBPage() {
         name: item.menuItem.name,
         price: item.menuItem.price,
         qty: item.qty,
+        yakitoriSelections: item.yakitoriSelections?.map((s) => ({
+          flavorName: s.flavorName,
+          typeName: s.typeName,
+        })),
       }));
       const order = await placeOrder(createOrderId(), "B", items);
       setConfirmedOrder(order);
@@ -125,6 +162,9 @@ export default function PosBPage() {
               >
                 <span className="block font-bold">
                   {item.emoji ? `${item.emoji} ` : ""}{item.name}
+                  {item.isYakitoriSet && (
+                    <span className="ml-1 text-xs font-bold text-brand-gold">{item.yakitoriSkewerCount}本</span>
+                  )}
                   {!item.isAvailable && <span className="ml-1 text-xs text-brand-vermilion">SOLDOUT</span>}
                 </span>
                 <span className="mt-1 block text-xs text-sub">¥{item.price}</span>
@@ -142,24 +182,45 @@ export default function PosBPage() {
           {cart.length > 0 ? (
             <div className="space-y-2">
               {cart.map((item) => (
-                <div key={item.menuItem.id} className="flex items-center justify-between text-sm text-ink">
-                  <span>{item.menuItem.name}</span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => changeQty(item.menuItem.id, -1)}
-                      className="h-7 w-7 rounded-full border border-line text-brand-indigo"
-                    >
-                      −
-                    </button>
-                    <span className="w-6 text-center">{item.qty}</span>
-                    <button
-                      onClick={() => changeQty(item.menuItem.id, 1)}
-                      className="h-7 w-7 rounded-full border border-line text-brand-indigo"
-                    >
-                      +
-                    </button>
-                    <span className="ml-2 w-16 text-right">¥{(item.menuItem.price * item.qty).toLocaleString()}</span>
+                <div key={item.lineId ?? item.menuItem.id} className="flex items-start justify-between text-sm text-ink">
+                  <div>
+                    <span>{item.menuItem.name}</span>
+                    {item.yakitoriSelections && (
+                      <span className="block text-xs text-sub">
+                        {item.yakitoriSelections
+                          .map((s, i) => `${i + 1}.${s.typeName}×${s.flavorName}`)
+                          .join("、")}
+                      </span>
+                    )}
                   </div>
+                  {item.yakitoriSelections ? (
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 text-right">¥{item.menuItem.price.toLocaleString()}</span>
+                      <button
+                        onClick={() => removeYakitoriSetFromCart(item.lineId as string)}
+                        className="rounded-lg border border-brand-vermilion/40 bg-brand-vermilion/10 px-2 py-1 text-xs font-bold text-brand-vermilion"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => changeQty(item.menuItem.id, -1)}
+                        className="h-7 w-7 rounded-full border border-line text-brand-indigo"
+                      >
+                        −
+                      </button>
+                      <span className="w-6 text-center">{item.qty}</span>
+                      <button
+                        onClick={() => changeQty(item.menuItem.id, 1)}
+                        className="h-7 w-7 rounded-full border border-line text-brand-indigo"
+                      >
+                        +
+                      </button>
+                      <span className="ml-2 w-16 text-right">¥{(item.menuItem.price * item.qty).toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -178,6 +239,16 @@ export default function PosBPage() {
           </button>
         </section>
       </div>
+
+      {setModalItem && (
+        <YakitoriSetModal
+          menuItem={setModalItem}
+          flavors={yakitoriFlavors}
+          types={yakitoriTypes}
+          onCancel={() => setSetModalItem(null)}
+          onConfirm={(selections) => addYakitoriSetToCart(setModalItem, selections)}
+        />
+      )}
     </main>
   );
 }

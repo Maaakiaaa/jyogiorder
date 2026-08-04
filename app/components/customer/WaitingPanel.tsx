@@ -148,7 +148,14 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
           <div className="mt-4 space-y-1 border-t border-line pt-4">
             {currentOrder.items.map((item, i) => (
               <div key={i} className="flex justify-between text-sm text-ink">
-                <span>{item.name} x {item.qty}</span>
+                <span>
+                  {item.name} x {item.qty}
+                  {item.yakitoriSelections && (
+                    <span className="block text-xs text-sub">
+                      {item.yakitoriSelections.map((s, si) => `${si + 1}.${s.typeName}×${s.flavorName}`).join("、")}
+                    </span>
+                  )}
+                </span>
                 <span>¥{(item.price * item.qty).toLocaleString()}</span>
               </div>
             ))}
@@ -163,7 +170,7 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
           <div className="mb-3 grid grid-cols-3 text-center text-[11px] font-bold uppercase tracking-[0.16em] text-sub">
             <span className={progress >= 25 ? "text-brand-indigo" : ""}>注文済み</span>
             <span className={currentOrder.status === "cooking" ? "flashing-cooking text-brand-gold" : "text-brand-indigo"}>調理中</span>
-            <span className={progress === 100 ? "text-brand-vermilion" : ""}>受け取り可能</span>
+            <span className={progress === 100 ? "text-brand-gold" : ""}>受け取り可能</span>
           </div>
 
           <div className="h-6 overflow-hidden rounded-full border border-line bg-canvas p-[3px]">

@@ -6,12 +6,12 @@ import CheckoutPanel from "@/app/components/customer/CheckoutPanel";
 import MenuPanel from "@/app/components/customer/MenuPanel";
 import WaitingPanel from "@/app/components/customer/WaitingPanel";
 import WelcomePanel from "@/app/components/customer/WelcomePanel";
-import { fetchMenuItems } from "@/lib/menu";
+import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes } from "@/lib/menu";
 import { fetchOrder } from "@/lib/orders";
 import { createOrderId } from "@/lib/qr";
 import { supabase } from "@/lib/supabase";
 import { loadCustomerSession, saveCustomerSession } from "@/lib/customerSession";
-import { CartItem, MenuItem, Order } from "@/types";
+import { CartItem, MenuItem, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 
 type CustomerStep = "menu" | "checkout" | "waiting" | "welcome";
 type TabType = "menu" | "cart";
@@ -24,6 +24,8 @@ export default function Home() {
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
+  const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [sessionRestored, setSessionRestored] = useState(false);
 
   const cartTotal = cart.reduce((sum, item) => sum + item.menuItem.price * item.qty, 0);
@@ -76,8 +78,16 @@ export default function Home() {
 
     async function loadMenu() {
       try {
-        const items = await fetchMenuItems();
-        if (!cancelled) setMenu(items);
+        const [items, flavors, types] = await Promise.all([
+          fetchMenuItems(),
+          fetchYakitoriFlavors(),
+          fetchYakitoriTypes(),
+        ]);
+        if (!cancelled) {
+          setMenu(items);
+          setYakitoriFlavors(flavors);
+          setYakitoriTypes(types);
+        }
       } catch {
         // silent
       }
@@ -87,6 +97,8 @@ export default function Home() {
     const channel = supabase
       .channel("menu-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_flavors" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_types" }, () => void loadMenu())
       .subscribe();
 
     return () => {
@@ -155,6 +167,17 @@ export default function Home() {
     });
   }
 
+  function addYakitoriSetToCart(menuItem: MenuItem, selections: YakitoriSkewerSelection[]) {
+    setCart((prev) => [
+      ...prev,
+      { menuItem, qty: 1, lineId: crypto.randomUUID(), yakitoriSelections: selections },
+    ]);
+  }
+
+  function removeYakitoriSetFromCart(lineId: string) {
+    setCart((prev) => prev.filter((item) => item.lineId !== lineId));
+  }
+
   function handleShowQr() {
     if (cart.length === 0) return;
     setPendingOrderId(createOrderId());
@@ -221,10 +244,10 @@ export default function Home() {
   return (
     <main className="festival-bg min-h-screen px-3 py-3">
       <div className="glass-panel relative z-10 mx-auto flex min-h-[95vh] w-full max-w-md flex-col overflow-hidden rounded-[28px]">
-        <header className="bg-gradient-to-r from-brand-indigo to-brand-vermilion px-4 py-5">
+        <header className="border-b-2 border-brand-gold bg-gradient-to-r from-brand-indigo-dark to-brand-indigo px-4 py-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/80">
+              <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-brand-gold/90">
                 TACHIBANASAI
               </p>
               <h1 className="neon-title mt-2 text-2xl text-white">MOBA JYOGI</h1>
@@ -240,12 +263,20 @@ export default function Home() {
 
         <section className="animate-slide-up flex-1 overflow-y-auto px-2 py-3">
           {activeTab === "menu" ? (
-            <MenuPanel menu={menu} cart={cart} onChangeQty={changeQty} />
+            <MenuPanel
+              menu={menu}
+              cart={cart}
+              yakitoriFlavors={yakitoriFlavors}
+              yakitoriTypes={yakitoriTypes}
+              onChangeQty={changeQty}
+              onAddYakitoriSet={addYakitoriSetToCart}
+            />
           ) : (
             <CartPanel
               cart={cart}
               total={cartTotal}
               onChangeQty={changeQty}
+              onRemoveYakitoriSet={removeYakitoriSetFromCart}
               onShowQr={handleShowQr}
             />
           )}
@@ -263,7 +294,7 @@ export default function Home() {
           <button
             onClick={() => setActiveTab("cart")}
             className={`rounded-xl px-2 py-[1.3rem] text-xs font-bold transition ${
-              activeTab === "cart" ? "neon-pill bg-brand-vermilion/10 text-brand-vermilion" : "text-sub"
+              activeTab === "cart" ? "neon-pill bg-brand-gold/10 text-brand-gold" : "text-sub"
             }`}
           >
             🛒 CART
@@ -277,7 +308,7 @@ export default function Home() {
               setStep("waiting");
             }}
             className={`rounded-xl px-2 py-[1.3rem] text-xs font-bold transition ${
-              orders.length > 0 ? "bg-brand-gold/10 text-brand-gold" : "text-line"
+              orders.length > 0 ? "bg-brand-indigo/10 text-brand-indigo" : "text-line"
             }`}
           >
             📦 MY ORDERS {orders.length > 0 ? `(${orders.length})` : ""}

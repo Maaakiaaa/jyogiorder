@@ -6,10 +6,11 @@ interface Props {
   cart: CartItem[];
   total: number;
   onChangeQty: (id: number, delta: number) => void;
+  onRemoveYakitoriSet: (lineId: string) => void;
   onShowQr: () => void;
 }
 
-export default function CartPanel({ cart, total, onChangeQty, onShowQr }: Props) {
+export default function CartPanel({ cart, total, onChangeQty, onRemoveYakitoriSet, onShowQr }: Props) {
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-sub">
@@ -25,28 +26,44 @@ export default function CartPanel({ cart, total, onChangeQty, onShowQr }: Props)
       <div className="flex-1 space-y-3 overflow-y-auto px-3 py-2">
         {cart.map((c) => (
           <article
-            key={c.menuItem.id}
+            key={c.lineId ?? c.menuItem.id}
             className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3"
           >
             <div>
               <p className="font-bold text-ink">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{c.menuItem.name}</p>
-              <p className="mt-1 text-sm text-sub">¥{c.menuItem.price} x {c.qty}</p>
+              {c.yakitoriSelections ? (
+                <p className="mt-1 text-sm text-sub">
+                  ¥{c.menuItem.price} ・{" "}
+                  {c.yakitoriSelections.map((s, i) => `${i + 1}.${s.typeName}×${s.flavorName}`).join("、")}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-sub">¥{c.menuItem.price} x {c.qty}</p>
+              )}
             </div>
-            <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
+            {c.yakitoriSelections ? (
               <button
-                onClick={() => onChangeQty(c.menuItem.id, -1)}
-                className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
+                onClick={() => onRemoveYakitoriSet(c.lineId as string)}
+                className="rounded-full border border-brand-vermilion/40 bg-brand-vermilion/10 px-4 py-2 text-xs font-bold text-brand-vermilion"
               >
-                −
+                削除
               </button>
-              <span className="w-8 text-center text-sm font-black text-ink">{c.qty}</span>
-              <button
-                onClick={() => onChangeQty(c.menuItem.id, 1)}
-                className="h-[3.25rem] w-[3.25rem] rounded-full border border-line text-2xl font-bold text-brand-indigo"
-              >
-                +
-              </button>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
+                <button
+                  onClick={() => onChangeQty(c.menuItem.id, -1)}
+                  className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
+                >
+                  −
+                </button>
+                <span className="w-8 text-center text-sm font-black text-ink">{c.qty}</span>
+                <button
+                  onClick={() => onChangeQty(c.menuItem.id, 1)}
+                  className="h-[3.25rem] w-[3.25rem] rounded-full border border-line text-2xl font-bold text-brand-indigo"
+                >
+                  +
+                </button>
+              </div>
+            )}
           </article>
         ))}
       </div>

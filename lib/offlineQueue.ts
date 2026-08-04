@@ -60,6 +60,7 @@ export function pendingOrderToOrder(pending: PendingOrder): Order {
       name: item.name,
       price: item.price,
       qty: item.qty,
+      yakitoriSelections: item.yakitoriSelections,
     })),
     created_at: pending.createdAt,
     updated_at: pending.createdAt,

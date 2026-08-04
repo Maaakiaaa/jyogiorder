@@ -1,24 +1,28 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { fetchMenuItems } from "@/lib/menu";
+import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes } from "@/lib/menu";
 import { NewOrderItem, placeOrder } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
-import { MenuItem, Order, QrOrderPayload } from "@/types";
+import { MenuItem, Order, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
 
 type ScannedLineItem = {
+  key: string;
   menuId: number;
   name: string;
   price: number;
   qty: number;
+  yakitoriSelections?: OrderItemYakitoriSelection[];
 };
 
 export default function PosAPage() {
   const scanInputRef = useRef<HTMLInputElement | null>(null);
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
+  const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [scanError, setScanError] = useState("");
   const [rawQrText, setRawQrText] = useState("");
   const [qrPayload, setQrPayload] = useState<QrOrderPayload | null>(null);
@@ -28,8 +32,12 @@ export default function PosAPage() {
   const pendingSyncCount = usePendingSync();
 
   useEffect(() => {
-    fetchMenuItems()
-      .then((items) => setMenu(items))
+    Promise.all([fetchMenuItems(), fetchYakitoriFlavors(), fetchYakitoriTypes()])
+      .then(([items, flavors, types]) => {
+        setMenu(items);
+        setYakitoriFlavors(flavors);
+        setYakitoriTypes(types);
+      })
       .catch(() => setScanError("メニュー情報の取得に失敗しました"));
   }, []);
 
@@ -41,16 +49,46 @@ export default function PosAPage() {
     setNextNumber(peekNextNumber("A"));
   }, [confirmedOrder]);
 
-  const scannedItems = useMemo<ScannedLineItem[]>(() => {
-    if (!qrPayload) return [];
+  const { scannedItems, hasMissingItems } = useMemo(() => {
+    if (!qrPayload) return { scannedItems: [] as ScannedLineItem[], hasMissingItems: false };
 
     const merged = new Map<number, ScannedLineItem>();
+    const setLines: ScannedLineItem[] = [];
+    let missing = false;
 
-    for (const item of qrPayload.items) {
+    qrPayload.items.forEach((item, index) => {
       const menuItem = menu.find((menuEntry) => menuEntry.id === item.menuId);
-      if (!menuItem) continue;
+      if (!menuItem) {
+        missing = true;
+        return;
+      }
+
+      // 焼き鳥セットは串の選択が異なりうるため、同じ商品IDでもqtyでまとめず1回の購入=1行として扱う。
+      if (item.yakitoriSelections) {
+        const resolved: OrderItemYakitoriSelection[] = [];
+        for (const selection of item.yakitoriSelections) {
+          const flavor = yakitoriFlavors.find((f) => f.id === selection.flavorId);
+          const type = yakitoriTypes.find((t) => t.id === selection.typeId);
+          if (!flavor || !type) {
+            missing = true;
+            return;
+          }
+          resolved.push({ flavorName: flavor.name, typeName: type.name });
+        }
+
+        setLines.push({
+          key: `set-${index}`,
+          menuId: item.menuId,
+          name: menuItem.name,
+          price: menuItem.price,
+          qty: item.qty,
+          yakitoriSelections: resolved,
+        });
+        return;
+      }
 
       const current = merged.get(item.menuId) ?? {
+        key: `plain-${item.menuId}`,
         menuId: item.menuId,
         name: menuItem.name,
         price: menuItem.price,
@@ -59,17 +97,15 @@ export default function PosAPage() {
 
       current.qty += item.qty;
       merged.set(item.menuId, current);
-    }
+    });
 
-    return Array.from(merged.values());
-  }, [menu, qrPayload]);
+    return { scannedItems: [...Array.from(merged.values()), ...setLines], hasMissingItems: missing };
+  }, [menu, qrPayload, yakitoriFlavors, yakitoriTypes]);
 
   const total = useMemo(
     () => scannedItems.reduce((sum, item) => sum + item.price * item.qty, 0),
     [scannedItems]
   );
-
-  const hasMissingItems = qrPayload ? scannedItems.length !== qrPayload.items.length : false;
 
   function handleScanResult(rawValue: string) {
     const payload = parseQrPayload(rawValue);
@@ -99,6 +135,7 @@ export default function PosAPage() {
         name: item.name,
         price: item.price,
         qty: item.qty,
+        yakitoriSelections: item.yakitoriSelections,
       }));
       const order = await placeOrder(qrPayload.orderId, "A", items);
       setConfirmedOrder(order);
@@ -202,9 +239,16 @@ export default function PosAPage() {
           {scannedItems.length > 0 ? (
             <div className="space-y-2">
               {scannedItems.map((item) => (
-                <div key={item.menuId} className="flex items-center justify-between text-sm text-ink">
+                <div key={item.key} className="flex items-start justify-between text-sm text-ink">
                   <span>
                     {item.name} x {item.qty}
+                    {item.yakitoriSelections && (
+                      <span className="block text-xs text-sub">
+                        {item.yakitoriSelections
+                          .map((s, i) => `${i + 1}.${s.typeName}×${s.flavorName}`)
+                          .join("、")}
+                      </span>
+                    )}
                   </span>
                   <span>¥{(item.price * item.qty).toLocaleString()}</span>
                 </div>

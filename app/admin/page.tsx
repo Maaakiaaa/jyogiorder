@@ -1,10 +1,21 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { Order, MenuItem } from "@/types";
+import { Order, MenuItem, YakitoriFlavor, YakitoriType } from "@/types";
 import { fetchSalesOrders } from "@/lib/orders";
-import { createMenuItem, fetchAllMenuItemsForAdmin, updateMenuItem } from "@/lib/menu";
+import {
+  createMenuItem,
+  createYakitoriFlavor,
+  createYakitoriType,
+  fetchAllMenuItemsForAdmin,
+  fetchAllYakitoriFlavorsForAdmin,
+  fetchAllYakitoriTypesForAdmin,
+  updateMenuItem,
+  updateYakitoriFlavor,
+  updateYakitoriType,
+} from "@/lib/menu";
 import { supabase } from "@/lib/supabase";
+import DonutChart from "@/app/components/admin/DonutChart";
 
 const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "1234";
 
@@ -14,6 +25,11 @@ type ProductSales = {
   name: string;
   qty: number;
   amount: number;
+};
+
+type SkewerSales = {
+  name: string;
+  qty: number;
 };
 
 function getErrorMessage(error: unknown) {
@@ -45,15 +61,23 @@ export default function AdminPage() {
   const [error, setError] = useState(false);
   const [salesOrders, setSalesOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
+  const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminTab, setAdminTab] = useState<AdminTab>("menu");
   const [editingMenuId, setEditingMenuId] = useState<number | null>(null);
   const [editingName, setEditingName] = useState<string>("");
   const [editingPrice, setEditingPrice] = useState<string>("");
+  const [editingIsYakitoriSet, setEditingIsYakitoriSet] = useState(false);
+  const [editingSkewerCount, setEditingSkewerCount] = useState("");
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuPrice, setNewMenuPrice] = useState("");
+  const [newMenuIsYakitoriSet, setNewMenuIsYakitoriSet] = useState(false);
+  const [newMenuSkewerCount, setNewMenuSkewerCount] = useState("");
   const [isCreateMenuFormOpen, setIsCreateMenuFormOpen] = useState(false);
   const [isCreatingMenuItem, setIsCreatingMenuItem] = useState(false);
+  const [newFlavorName, setNewFlavorName] = useState("");
+  const [newTypeName, setNewTypeName] = useState("");
 
   useEffect(() => {
     if (sessionStorage.getItem("admin_authed") === "true") {
@@ -80,12 +104,16 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     try {
-      const [menuData, salesOrderData] = await Promise.all([
+      const [menuData, salesOrderData, flavorData, typeData] = await Promise.all([
         fetchAllMenuItemsForAdmin(),
         fetchSalesOrders(),
+        fetchAllYakitoriFlavorsForAdmin(),
+        fetchAllYakitoriTypesForAdmin(),
       ]);
       setMenu(menuData);
       setSalesOrders(salesOrderData);
+      setYakitoriFlavors(flavorData);
+      setYakitoriTypes(typeData);
     } catch {
       // silent
     } finally {
@@ -111,6 +139,35 @@ export default function AdminPage() {
 
     return Array.from(salesMap.values()).sort((a, b) => b.qty - a.qty || b.amount - a.amount || a.name.localeCompare(b.name, "ja"));
   }, [menu, salesOrders]);
+
+  // 焼き鳥セットは価格が種類・味に関係なく固定のため、金額ではなく本数だけを集計する。
+  const { yakitoriTypeSales, yakitoriFlavorSales, totalSkewerCount } = useMemo(() => {
+    const typeCounts = new Map<string, number>();
+    const flavorCounts = new Map<string, number>();
+    let total = 0;
+
+    for (const order of salesOrders) {
+      for (const item of order.items) {
+        if (!item.yakitoriSelections) continue;
+        for (const selection of item.yakitoriSelections) {
+          typeCounts.set(selection.typeName, (typeCounts.get(selection.typeName) ?? 0) + item.qty);
+          flavorCounts.set(selection.flavorName, (flavorCounts.get(selection.flavorName) ?? 0) + item.qty);
+          total += item.qty;
+        }
+      }
+    }
+
+    const toSorted = (counts: Map<string, number>): SkewerSales[] =>
+      Array.from(counts.entries())
+        .map(([name, qty]) => ({ name, qty }))
+        .sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name, "ja"));
+
+    return {
+      yakitoriTypeSales: toSorted(typeCounts),
+      yakitoriFlavorSales: toSorted(flavorCounts),
+      totalSkewerCount: total,
+    };
+  }, [salesOrders]);
 
   const totalSoldCount = useMemo(
     () => productSales.reduce((sum, item) => sum + item.qty, 0),
@@ -185,8 +242,19 @@ export default function AdminPage() {
     const newPrice = parseInt(editingPrice, 10);
     if (!newName || isNaN(newPrice)) return;
 
+    const skewerCount = parseInt(editingSkewerCount, 10);
+    if (editingIsYakitoriSet && (isNaN(skewerCount) || skewerCount <= 0)) {
+      alert("串の本数を正しく入力してください");
+      return;
+    }
+
     try {
-      await updateMenuItem(menuId, { name: newName, price: newPrice });
+      await updateMenuItem(menuId, {
+        name: newName,
+        price: newPrice,
+        isYakitoriSet: editingIsYakitoriSet,
+        yakitoriSkewerCount: editingIsYakitoriSet ? skewerCount : null,
+      });
       clearMenuEditing();
       await load();
     } catch (error) {
@@ -203,11 +271,24 @@ export default function AdminPage() {
       return;
     }
 
+    const skewerCount = parseInt(newMenuSkewerCount, 10);
+    if (newMenuIsYakitoriSet && (isNaN(skewerCount) || skewerCount <= 0)) {
+      alert("串の本数を正しく入力してください");
+      return;
+    }
+
     setIsCreatingMenuItem(true);
     try {
-      await createMenuItem({ name, price });
+      await createMenuItem({
+        name,
+        price,
+        isYakitoriSet: newMenuIsYakitoriSet,
+        yakitoriSkewerCount: newMenuIsYakitoriSet ? skewerCount : null,
+      });
       setNewMenuName("");
       setNewMenuPrice("");
+      setNewMenuIsYakitoriSet(false);
+      setNewMenuSkewerCount("");
       setIsCreateMenuFormOpen(false);
       await load();
     } catch (error) {
@@ -222,12 +303,58 @@ export default function AdminPage() {
     setEditingMenuId(item.id);
     setEditingName(item.name);
     setEditingPrice(item.price.toString());
+    setEditingIsYakitoriSet(item.isYakitoriSet);
+    setEditingSkewerCount(item.yakitoriSkewerCount?.toString() ?? "");
   }
 
   function clearMenuEditing() {
     setEditingMenuId(null);
     setEditingName("");
     setEditingPrice("");
+    setEditingIsYakitoriSet(false);
+    setEditingSkewerCount("");
+  }
+
+  async function handleCreateYakitoriFlavor() {
+    const name = newFlavorName.trim();
+    if (!name) return;
+    try {
+      await createYakitoriFlavor(name);
+      setNewFlavorName("");
+      await load();
+    } catch (error) {
+      alert(`追加に失敗しました: ${getErrorMessage(error)}`);
+    }
+  }
+
+  async function handleCreateYakitoriType() {
+    const name = newTypeName.trim();
+    if (!name) return;
+    try {
+      await createYakitoriType(name);
+      setNewTypeName("");
+      await load();
+    } catch (error) {
+      alert(`追加に失敗しました: ${getErrorMessage(error)}`);
+    }
+  }
+
+  async function handleToggleYakitoriFlavor(id: number, currentActive: boolean) {
+    try {
+      await updateYakitoriFlavor(id, { isActive: !currentActive });
+      await load();
+    } catch (error) {
+      alert(`更新に失敗しました: ${getErrorMessage(error)}`);
+    }
+  }
+
+  async function handleToggleYakitoriType(id: number, currentActive: boolean) {
+    try {
+      await updateYakitoriType(id, { isActive: !currentActive });
+      await load();
+    } catch (error) {
+      alert(`更新に失敗しました: ${getErrorMessage(error)}`);
+    }
   }
 
   async function handleAvailableToggle(menuId: number, currentAvailable: boolean) {
@@ -351,6 +478,31 @@ export default function AdminPage() {
                 )}
               </div>
             </section>
+
+            {totalSkewerCount > 0 && (
+              <section className="rounded-2xl border border-line bg-canvas p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-base font-black text-ink">焼き鳥セットの内訳</p>
+                  <p className="text-xs font-bold text-brand-gold">串 {totalSkewerCount}本</p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-line bg-surface p-3">
+                    <p className="text-sm font-bold text-ink">種類別</p>
+                    <div className="mt-3">
+                      <DonutChart data={yakitoriTypeSales.map((s) => ({ name: s.name, value: s.qty }))} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-line bg-surface p-3">
+                    <p className="text-sm font-bold text-ink">味別</p>
+                    <div className="mt-3">
+                      <DonutChart data={yakitoriFlavorSales.map((s) => ({ name: s.name, value: s.qty }))} />
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
           </div>
         )}
 
@@ -369,41 +521,155 @@ export default function AdminPage() {
               </div>
 
               {isCreateMenuFormOpen && (
-                <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1.4fr)_110px_auto_auto]">
-                  <input
-                    type="text"
-                    value={newMenuName}
-                    onChange={(e) => setNewMenuName(e.target.value)}
-                    placeholder="商品名"
-                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
-                    autoFocus
-                  />
-                  <input
-                    type="number"
-                    value={newMenuPrice}
-                    onChange={(e) => setNewMenuPrice(e.target.value)}
-                    placeholder="価格"
-                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
-                  />
-                  <button
-                    onClick={handleCreateMenuItem}
-                    disabled={isCreatingMenuItem}
-                    className="rounded-lg border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo disabled:opacity-50"
-                  >
-                    {isCreatingMenuItem ? "追加中..." : "追加"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsCreateMenuFormOpen(false);
-                      setNewMenuName("");
-                      setNewMenuPrice("");
-                    }}
-                    className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-sub"
-                  >
-                    キャンセル
-                  </button>
+                <div className="mt-3 space-y-2">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1.4fr)_110px_auto_auto]">
+                    <input
+                      type="text"
+                      value={newMenuName}
+                      onChange={(e) => setNewMenuName(e.target.value)}
+                      placeholder="商品名"
+                      className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
+                      autoFocus
+                    />
+                    <input
+                      type="number"
+                      value={newMenuPrice}
+                      onChange={(e) => setNewMenuPrice(e.target.value)}
+                      placeholder="価格"
+                      className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
+                    />
+                    <button
+                      onClick={handleCreateMenuItem}
+                      disabled={isCreatingMenuItem}
+                      className="rounded-lg border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo disabled:opacity-50"
+                    >
+                      {isCreatingMenuItem ? "追加中..." : "追加"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsCreateMenuFormOpen(false);
+                        setNewMenuName("");
+                        setNewMenuPrice("");
+                        setNewMenuIsYakitoriSet(false);
+                        setNewMenuSkewerCount("");
+                      }}
+                      className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-sub"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-sub">
+                    <input
+                      type="checkbox"
+                      checked={newMenuIsYakitoriSet}
+                      onChange={(e) => setNewMenuIsYakitoriSet(e.target.checked)}
+                    />
+                    焼き鳥セット(串ごとに味・種類を選べる)
+                  </label>
+
+                  {newMenuIsYakitoriSet && (
+                    <input
+                      type="number"
+                      value={newMenuSkewerCount}
+                      onChange={(e) => setNewMenuSkewerCount(e.target.value)}
+                      placeholder="本数(例: 3)"
+                      className="w-32 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
+                    />
+                  )}
                 </div>
               )}
+            </section>
+
+            <section className="rounded-2xl border border-line bg-canvas p-4">
+              <p className="text-base font-black text-ink">焼き鳥の味・種類</p>
+              <p className="mt-1 text-xs text-sub">
+                串の味(たれ/塩など)と種類(もも/ねぎま/かわなど)を管理します。無効化すると、以後お客様画面・POSの選択肢から外れます。
+              </p>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm font-bold text-ink">味</p>
+                  <div className="mt-2 space-y-2">
+                    {yakitoriFlavors.map((flavor) => (
+                      <div
+                        key={flavor.id}
+                        className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2"
+                      >
+                        <span className={`text-sm ${flavor.isActive ? "text-ink" : "text-sub line-through"}`}>
+                          {flavor.name}
+                        </span>
+                        <button
+                          onClick={() => handleToggleYakitoriFlavor(flavor.id, flavor.isActive)}
+                          className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                            flavor.isActive
+                              ? "border-emerald-400/60 bg-emerald-50 text-emerald-700"
+                              : "border-line text-sub"
+                          }`}
+                        >
+                          {flavor.isActive ? "有効" : "無効"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={newFlavorName}
+                      onChange={(e) => setNewFlavorName(e.target.value)}
+                      placeholder="味を追加(例: 味噌)"
+                      className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
+                    />
+                    <button
+                      onClick={handleCreateYakitoriFlavor}
+                      className="rounded-lg border border-brand-indigo/40 bg-brand-indigo/10 px-3 py-2 text-sm font-bold text-brand-indigo"
+                    >
+                      追加
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-ink">種類</p>
+                  <div className="mt-2 space-y-2">
+                    {yakitoriTypes.map((type) => (
+                      <div
+                        key={type.id}
+                        className="flex items-center justify-between rounded-lg border border-line bg-surface px-3 py-2"
+                      >
+                        <span className={`text-sm ${type.isActive ? "text-ink" : "text-sub line-through"}`}>
+                          {type.name}
+                        </span>
+                        <button
+                          onClick={() => handleToggleYakitoriType(type.id, type.isActive)}
+                          className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                            type.isActive
+                              ? "border-emerald-400/60 bg-emerald-50 text-emerald-700"
+                              : "border-line text-sub"
+                          }`}
+                        >
+                          {type.isActive ? "有効" : "無効"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={newTypeName}
+                      onChange={(e) => setNewTypeName(e.target.value)}
+                      placeholder="種類を追加(例: 手羽)"
+                      className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
+                    />
+                    <button
+                      onClick={handleCreateYakitoriType}
+                      className="rounded-lg border border-brand-indigo/40 bg-brand-indigo/10 px-3 py-2 text-sm font-bold text-brand-indigo"
+                    >
+                      追加
+                    </button>
+                  </div>
+                </div>
+              </div>
             </section>
             {menu.map((item) => (
               <article key={item.id} className={`rounded-2xl border p-4 transition ${
@@ -428,6 +694,11 @@ export default function AdminPage() {
                     ) : (
                       <p className="text-base font-black text-ink">
                         {item.emoji ? `${item.emoji} ` : ""}{item.name}
+                        {item.isYakitoriSet && (
+                          <span className="ml-2 text-xs font-bold text-brand-gold">
+                            セット({item.yakitoriSkewerCount}本)
+                          </span>
+                        )}
                         {!item.isActive && <span className="ml-2 text-xs font-bold text-sub">非表示</span>}
                       </p>
                     )}
@@ -456,13 +727,32 @@ export default function AdminPage() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-sub">価格:</span>
                   {editingMenuId === item.id ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-1 flex-wrap items-center gap-2">
                       <input
                         type="number"
                         value={editingPrice}
                         onChange={(e) => setEditingPrice(e.target.value)}
                         className="w-20 rounded-lg border border-line bg-canvas px-2 py-1 text-sm text-ink outline-none"
                       />
+
+                      <label className="flex items-center gap-1 text-xs text-sub">
+                        <input
+                          type="checkbox"
+                          checked={editingIsYakitoriSet}
+                          onChange={(e) => setEditingIsYakitoriSet(e.target.checked)}
+                        />
+                        セット
+                      </label>
+                      {editingIsYakitoriSet && (
+                        <input
+                          type="number"
+                          value={editingSkewerCount}
+                          onChange={(e) => setEditingSkewerCount(e.target.value)}
+                          placeholder="本数"
+                          className="w-20 rounded-lg border border-line bg-canvas px-2 py-1 text-sm text-ink outline-none"
+                        />
+                      )}
+
                       <button
                         onClick={() => handleMenuUpdate(item.id)}
                         className="rounded-lg border border-emerald-400/60 bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700"
