@@ -6,7 +6,10 @@ import { NewOrderItem, placeOrder } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
+import CameraQrScanner from "@/app/components/pos/CameraQrScanner";
 import { MenuItem, Order, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
+
+type ScanMode = "camera" | "manual";
 
 type ScannedLineItem = {
   key: string;
@@ -23,6 +26,7 @@ export default function PosAPage() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
   const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
+  const [scanMode, setScanMode] = useState<ScanMode>("camera");
   const [scanError, setScanError] = useState("");
   const [rawQrText, setRawQrText] = useState("");
   const [qrPayload, setQrPayload] = useState<QrOrderPayload | null>(null);
@@ -42,8 +46,8 @@ export default function PosAPage() {
   }, []);
 
   useEffect(() => {
-    scanInputRef.current?.focus();
-  }, []);
+    if (scanMode === "manual") scanInputRef.current?.focus();
+  }, [scanMode]);
 
   useEffect(() => {
     setNextNumber(peekNextNumber("A"));
@@ -125,6 +129,14 @@ export default function PosAPage() {
     }
   }
 
+  function handleCameraScan(rawValue: string) {
+    try {
+      handleScanResult(rawValue);
+    } catch (error) {
+      setScanError(error instanceof Error ? error.message : "QRコードの解析に失敗しました");
+    }
+  }
+
   async function handleConfirmPayment() {
     if (!qrPayload || scannedItems.length === 0 || isSubmitting || hasMissingItems) return;
 
@@ -178,40 +190,83 @@ export default function PosAPage() {
         </header>
 
         <section className="mt-4 rounded-2xl border border-line bg-canvas p-4">
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-sub">スキャン入力</p>
-          <form onSubmit={handleImport} className="mt-3 space-y-3">
-            <input
-              ref={scanInputRef}
-              type="text"
-              value={rawQrText}
-              onChange={(event) => setRawQrText(event.target.value)}
-              placeholder="V1O..."
-              className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-sm text-ink outline-none"
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-
-            <div className="flex flex-wrap gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-sub">スキャン入力</p>
+            <div className="flex gap-1 rounded-full border border-line bg-surface p-1">
               <button
-                type="submit"
-                className="rounded-xl border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo"
+                type="button"
+                onClick={() => setScanMode("camera")}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  scanMode === "camera" ? "bg-brand-indigo text-white" : "text-sub"
+                }`}
               >
-                読み込む
+                カメラ
               </button>
               <button
                 type="button"
-                onClick={resetScan}
-                className="rounded-xl border border-line px-4 py-2 text-sm font-bold text-sub"
+                onClick={() => setScanMode("manual")}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  scanMode === "manual" ? "bg-brand-indigo text-white" : "text-sub"
+                }`}
               >
-                リセット
+                スキャナー/手入力
               </button>
             </div>
-          </form>
+          </div>
 
-          <p className="mt-3 text-xs text-sub">
-            バーコードスキャナがEnterを送る設定なら、そのまま読み込みが確定します。
-          </p>
+          {scanMode === "camera" ? (
+            <div className="mt-3">
+              <CameraQrScanner paused={!!qrPayload} onScan={handleCameraScan} />
+              <p className="mt-3 text-xs text-sub">
+                タブレットのカメラをお客様のQRコードにかざしてください。読み取ると自動で下に内容が表示されます。
+              </p>
+              {qrPayload && (
+                <button
+                  type="button"
+                  onClick={resetScan}
+                  className="mt-3 rounded-xl border border-line px-4 py-2 text-sm font-bold text-sub"
+                >
+                  リセットして読み取り直す
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <form onSubmit={handleImport} className="mt-3 space-y-3">
+                <input
+                  ref={scanInputRef}
+                  type="text"
+                  value={rawQrText}
+                  onChange={(event) => setRawQrText(event.target.value)}
+                  placeholder="V1O..."
+                  className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-sm text-ink outline-none"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    className="rounded-xl border border-brand-indigo/40 bg-brand-indigo/10 px-4 py-2 text-sm font-bold text-brand-indigo"
+                  >
+                    読み込む
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetScan}
+                    className="rounded-xl border border-line px-4 py-2 text-sm font-bold text-sub"
+                  >
+                    リセット
+                  </button>
+                </div>
+              </form>
+
+              <p className="mt-3 text-xs text-sub">
+                バーコードスキャナがEnterを送る設定なら、そのまま読み込みが確定します。
+              </p>
+            </>
+          )}
         </section>
 
         {scanError && (
