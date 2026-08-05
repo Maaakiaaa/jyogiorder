@@ -83,7 +83,7 @@ export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, o
             <p key={idx} className="text-sm text-ink">
               {i.name} x {i.qty}
               {i.yakitoriSelections && (
-                <span className="block text-xs text-emerald-600">
+                <span className="block text-xs text-[#005133]">
                   {i.yakitoriSelections.map((s, si) => `${si + 1}.${s.typeName}×${s.flavorName}`).join("、")}
                 </span>
               )}
