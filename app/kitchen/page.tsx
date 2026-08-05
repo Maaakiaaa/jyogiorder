@@ -128,13 +128,13 @@ export default function KitchenPage() {
                   className="flex items-center justify-between rounded-xl border border-brand-vermilion/30 bg-brand-vermilion/5 px-4 py-3"
                 >
                   <div>
-                    <p className="text-sm font-black text-ink">番号 {order.number}</p>
-                    <p className="text-xs text-[#005133]">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
+                    <p className="text-base font-black text-ink">番号 {order.number}</p>
+                    <p className="text-sm text-[#005133]">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
                   </div>
                   <button
                     disabled={updating === order.id}
                     onClick={() => handleRestore(order.id)}
-                    className="rounded-lg border border-line bg-white px-3 py-2 text-xs font-black text-brand-indigo disabled:opacity-40"
+                    className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold text-brand-indigo disabled:opacity-40"
                   >
                     {updating === order.id ? "..." : "取消を戻す"}
                   </button>
