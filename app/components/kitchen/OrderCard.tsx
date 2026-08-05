@@ -2,23 +2,7 @@
 
 import { Order, OrderStatus } from "@/types";
 
-const ELAPSED_CLASS = {
-  normal: "border-emerald-300/70 bg-white text-emerald-700",
-  warning: "border-orange-500/70 bg-white text-orange-700 ring-1 ring-orange-300/40",
-  danger: "border-rose-500/70 bg-white text-rose-700 ring-1 ring-rose-300/40",
-} as const;
-
-const CARD_CLASS = {
-  normal: "border-line",
-  warning: "border-orange-500",
-  danger: "border-red-600",
-} as const;
-
-const CARD_BACKGROUND = {
-  normal: "transparent",
-  warning: "#FF9E50",
-  danger: "#e62600",
-} as const;
+const CARD_BACKGROUND = "#659AD2";
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   received: "受付",
@@ -27,8 +11,6 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   handed: "受け渡し済み",
   cancelled: "取消",
 };
-
-type ElapsedVariant = keyof typeof ELAPSED_CLASS;
 
 interface Props {
   order: Order;
@@ -43,29 +25,23 @@ function formatElapsedTime(createdAt: string, now: number) {
   const elapsedSeconds = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 1000));
   const minutes = Math.floor(elapsedSeconds / 60);
   const seconds = elapsedSeconds % 60;
-  const variant: ElapsedVariant = elapsedSeconds > 300 ? "danger" : elapsedSeconds > 120 ? "warning" : "normal";
-
-  return {
-    label: `${minutes}:${String(seconds).padStart(2, "0")}`,
-    variant,
-    tone: ELAPSED_CLASS[variant],
-  };
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, onCancel }: Props) {
-  const elapsed = formatElapsedTime(order.created_at, now);
+  const elapsedLabel = formatElapsedTime(order.created_at, now);
 
   return (
     <article
-      className={`relative isolate overflow-hidden rounded-2xl border p-4 transition-colors duration-300 ${CARD_CLASS[elapsed.variant]}`}
-      style={{ backgroundColor: CARD_BACKGROUND[elapsed.variant] }}
+      className="relative isolate overflow-hidden rounded-2xl border border-line p-4"
+      style={{ backgroundColor: CARD_BACKGROUND }}
     >
       <div className="relative z-10">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="text-2xl font-black text-ink">番号 {order.number}</span>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-3 py-1 text-sm font-bold ${elapsed.tone}`}>
-              経過 {elapsed.label}
+            <span className="rounded-full border border-white/70 bg-white px-3 py-1 text-sm font-bold text-ink">
+              経過 {elapsedLabel}
             </span>
             <span
               className={`rounded-full border px-3 py-1 text-sm font-bold ${
