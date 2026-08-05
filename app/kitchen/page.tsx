@@ -129,7 +129,7 @@ export default function KitchenPage() {
                 >
                   <div>
                     <p className="text-base font-black text-ink">番号 {order.number}</p>
-                    <p className="text-sm text-[#005133]">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
+                    <p className="text-sm text-[#AF011C]">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
                   </div>
                   <button
                     disabled={updating === order.id}
