@@ -16,6 +16,8 @@ import { CartItem, MenuItem, Order, YakitoriFlavor, YakitoriSkewerSelection, Yak
 type CustomerStep = "menu" | "checkout" | "waiting" | "welcome";
 type TabType = "menu" | "cart";
 
+const WAITING_TIMEOUT_MS = 10000;
+
 export default function Home() {
   const [step, setStep] = useState<CustomerStep>("menu");
   const [activeTab, setActiveTab] = useState<TabType>("menu");
@@ -23,6 +25,7 @@ export default function Home() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [waitingTimedOut, setWaitingTimedOut] = useState(false);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
   const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
@@ -113,10 +116,13 @@ export default function Home() {
   useEffect(() => {
     if (!pendingOrderId) return;
 
+    const timeout = setTimeout(() => setWaitingTimedOut(true), WAITING_TIMEOUT_MS);
+
     const handleConfirmed = (order: Order) => {
       setOrders((prev) => (prev.some((o) => o.id === order.id) ? prev : [...prev, order]));
       setActiveOrderId(order.id);
       setPendingOrderId(null);
+      setWaitingTimedOut(false);
       setCart([]);
       setStep("waiting");
       setActiveTab("menu");
@@ -142,6 +148,7 @@ export default function Home() {
     return () => {
       supabase.removeChannel(channel);
       clearInterval(poll);
+      clearTimeout(timeout);
     };
   }, [pendingOrderId]);
 
@@ -181,6 +188,7 @@ export default function Home() {
   function handleShowQr() {
     if (cart.length === 0) return;
     setPendingOrderId(createOrderId());
+    setWaitingTimedOut(false);
     setStep("checkout");
   }
 
@@ -228,8 +236,10 @@ export default function Home() {
         cart={cart}
         total={cartTotal}
         orderId={pendingOrderId}
+        timedOut={waitingTimedOut}
         onBack={() => {
           setPendingOrderId(null);
+          setWaitingTimedOut(false);
           setStep("menu");
           setActiveTab("cart");
         }}

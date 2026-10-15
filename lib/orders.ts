@@ -5,6 +5,7 @@ import {
   getPendingOrder,
   listPendingOrders,
   pendingOrderToOrder,
+  recordPendingOrderFailure,
   removePendingOrder,
 } from "./offlineQueue";
 import { Order, OrderItem, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
@@ -94,15 +95,18 @@ export async function placeOrder(
   let existing: Order | null = null;
   try {
     existing = await findExistingOrder(orderId);
-  } catch {
+  } catch (error) {
     // サーバーの状態が確認できない(オフライン等)。楽観的に「未登録」とはみなさない。
-    if (pending) return pendingOrderToOrder(pending);
+    if (pending) {
+      return pendingOrderToOrder(recordPendingOrderFailure(orderId, error) ?? pending);
+    }
 
     const total = orderTotalFromNewItems(items);
     const { seq, number } = issueNextNumber(prefix);
     const createdAt = new Date().toISOString();
-    enqueuePendingOrder({ orderId, prefix, seq, number, items, total, createdAt });
-    return pendingOrderToOrder({ orderId, prefix, seq, number, items, total, createdAt });
+    const pendingOrder = { orderId, prefix, seq, number, items, total, createdAt, attempts: 0, lastError: null };
+    enqueuePendingOrder(pendingOrder, true, false);
+    return pendingOrderToOrder(recordPendingOrderFailure(orderId, error) ?? pendingOrder);
   }
 
   if (existing) {
@@ -115,7 +119,17 @@ export async function placeOrder(
   const createdAt = pending?.createdAt ?? new Date().toISOString();
 
   if (!pending) {
-    enqueuePendingOrder({ orderId, prefix, seq, number, items, total, createdAt });
+    enqueuePendingOrder({
+      orderId,
+      prefix,
+      seq,
+      number,
+      items,
+      total,
+      createdAt,
+      attempts: 0,
+      lastError: null,
+    }, true, false);
   }
 
   try {
@@ -152,9 +166,12 @@ export async function placeOrder(
 
     removePendingOrder(orderId);
     return fromRows(insertedOrder as OrderRow, await fetchItemsForOrder(orderId));
-  } catch {
+  } catch (error) {
     // 番号はキューに確保済みなので、そのまま返してオンライン復帰時の再送に委ねる。
-    return pendingOrderToOrder({ orderId, prefix, seq, number, items, total, createdAt });
+    const failed = recordPendingOrderFailure(orderId, error);
+    return pendingOrderToOrder(
+      failed ?? { orderId, prefix, seq, number, items, total, createdAt, attempts: 1, lastError: "送信に失敗しました" }
+    );
   }
 }
 
@@ -164,8 +181,8 @@ export async function flushPendingOrders(): Promise<number> {
   for (const pending of listPendingOrders()) {
     try {
       await placeOrder(pending.orderId, pending.prefix, pending.items);
-    } catch {
-      // まだオフライン。次回に持ち越す。
+    } catch (error) {
+      recordPendingOrderFailure(pending.orderId, error);
     }
   }
   return listPendingOrders().length;

@@ -10,22 +10,12 @@ interface Props {
   cart: CartItem[];
   total: number;
   orderId: string;
+  timedOut: boolean;
   onBack: () => void;
 }
 
-// この秒数を過ぎてもレジでスキャンされない場合、通信不良や読み取り失敗を疑ってもらうための目安。
-const TIMEOUT_HINT_MS = 45000;
-
-export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
+export default function CheckoutPanel({ cart, total, orderId, timedOut, onBack }: Props) {
   const [qrCodeUrl, setQrCodeUrl] = useState("");
-  const [showTimeoutHint, setShowTimeoutHint] = useState(false);
-
-  useEffect(() => {
-    // orderIdはCheckoutPanelがマウントされている間ずっと同じ値のまま(親が別のstepへ
-    // 遷移すると、このコンポーネント自体がアンマウントされるため)。初期値のfalseで足りる。
-    const timer = setTimeout(() => setShowTimeoutHint(true), TIMEOUT_HINT_MS);
-    return () => clearTimeout(timer);
-  }, []);
 
   const qrPayload = useMemo<QrOrderPayload>(
     () => ({
@@ -77,7 +67,11 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
       </div>
 
       <div className="mt-4 flex flex-1 flex-col items-center justify-center rounded-2xl border border-line bg-surface p-4">
-        {qrCodeUrl ? (
+        {timedOut ? (
+          <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 px-5 py-6 text-center text-lg font-black text-brand-gold">
+            レジで番号を確認してください
+          </div>
+        ) : qrCodeUrl ? (
           <Image
             src={qrCodeUrl}
             alt="会計用QRコード"
@@ -92,12 +86,6 @@ export default function CheckoutPanel({ cart, total, orderId, onBack }: Props) {
           </div>
         )}
       </div>
-
-      {showTimeoutHint && (
-        <div className="mt-4 rounded-2xl border border-brand-gold/40 bg-brand-gold/10 px-4 py-3 text-sm text-brand-gold">
-          反応がない場合は、通信状況によりレジ側に届いていない可能性があります。レジで番号をご確認ください。
-        </div>
-      )}
 
       <div className="mt-4 rounded-2xl border border-line bg-canvas p-4">
         <p className="mb-3 text-sm font-bold uppercase tracking-[0.16em] text-sub">注文内容</p>

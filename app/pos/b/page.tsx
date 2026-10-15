@@ -26,7 +26,7 @@ export default function PosBPage() {
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [nextNumber, setNextNumber] = useState("-");
-  const pendingSyncCount = usePendingSync();
+  const { pendingCount: pendingSyncCount, lastError: pendingSyncError } = usePendingSync();
 
   useEffect(() => {
     Promise.all([fetchMenuItems(), fetchYakitoriFlavors(), fetchYakitoriTypes()])
@@ -129,7 +129,7 @@ export default function PosBPage() {
           <p className="mt-1 text-xs text-sub">次に発行される番号: {nextNumber}</p>
           {pendingSyncCount > 0 && (
             <p className="mt-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 px-3 py-1.5 text-xs font-bold text-brand-gold">
-              オフライン: 同期待ち {pendingSyncCount}件（このまま操作を続けてください。復帰次第自動送信します）
+              未送信{pendingSyncCount}件・最後のエラー: {pendingSyncError ?? "送信待ち"}
             </p>
           )}
         </header>
