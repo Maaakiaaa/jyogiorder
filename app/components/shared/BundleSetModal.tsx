@@ -188,19 +188,25 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
                     {(yakitoriDrafts[slot.id] ?? []).map((draft, index) => (
                       <div key={index} className="mt-2 rounded-xl border border-line bg-surface p-2">
                         <p className="text-xs font-bold text-sub">{index + 1}本目</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
+                        <div className="mt-2 flex items-start gap-2">
+                          <span className="w-12 shrink-0 pt-1 text-xs font-bold text-sub">味：</span>
+                          <div className="flex flex-wrap gap-2">
                           {flavors.map((flavor) => (
                             <button key={flavor.id} type="button" onClick={() => selectYakitori(slot.id, index, "flavorId", flavor.id)} className={`rounded-full border px-3 py-1 text-xs font-bold ${draft.flavorId === flavor.id ? "border-brand-indigo bg-brand-indigo text-white" : "border-line bg-white text-sub"}`}>
                               {flavor.name}
                             </button>
                           ))}
+                          </div>
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {types.map((type) => (
-                            <button key={type.id} type="button" onClick={() => selectYakitori(slot.id, index, "typeId", type.id)} className={`rounded-full border px-3 py-1 text-xs font-bold ${draft.typeId === type.id ? "border-brand-gold bg-brand-gold text-white" : "border-line bg-white text-sub"}`}>
-                              {type.name}
-                            </button>
-                          ))}
+                        <div className="mt-2 flex items-start gap-2">
+                          <span className="w-12 shrink-0 pt-1 text-xs font-bold text-sub">種類：</span>
+                          <div className="flex flex-wrap gap-2">
+                            {types.map((type) => (
+                              <button key={type.id} type="button" onClick={() => selectYakitori(slot.id, index, "typeId", type.id)} className={`rounded-full border px-3 py-1 text-xs font-bold ${draft.typeId === type.id ? "border-brand-gold bg-brand-gold text-white" : "border-line bg-white text-sub"}`}>
+                                {type.name}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     ))}

@@ -32,6 +32,12 @@ begin
   set name = 'ドリンクと焼き鳥セット', is_set = true
   where id = set_menu_item_id;
 
+  -- セットのドリンク候補はカテゴリ参照なので、既存のドリンクを複製せず
+  -- 本物の4商品をドリンクカテゴリへ揃える。
+  update menu_items
+  set category_id = drink_category_id
+  where name in ('うさこモクテル', 'ねここモクテル', 'けろこラテ', 'ゆず茶');
+
   -- 同じセットが複数作られている場合は、採用した1件以外を削除する。
   -- order_items.menu_item_id は on delete set null、表示用スナップショットは保持される。
   for duplicate_set_item_id in
