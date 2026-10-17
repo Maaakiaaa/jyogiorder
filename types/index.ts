@@ -38,6 +38,7 @@ export interface MenuItem {
   id: number;
   code: number;
   categoryId: number | null;
+  categoryName?: string;
   name: string;
   price: number;
   emoji?: string;

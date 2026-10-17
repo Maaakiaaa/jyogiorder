@@ -31,6 +31,7 @@ export default function MenuPanel({
   const [optionsModalItem, setOptionsModalItem] = useState<MenuItem | null>(null);
   const [bundleModalItem, setBundleModalItem] = useState<MenuItem | null>(null);
   const [pendingOptions, setPendingOptions] = useState<MenuOption[] | undefined>();
+  const [activeTag, setActiveTag] = useState<"yakitori" | "drink">("yakitori");
 
   function getQty(id: number) {
     return cart.find((c) => c.menuItem.id === id)?.qty ?? 0;
@@ -50,9 +51,28 @@ export default function MenuPanel({
     return item.bundleSlots.some((slot) => slot.candidateItems.length === 0 || slot.candidateItems.every(isOptionSoldout));
   }
 
+  const visibleMenu = menu.filter((item) => activeTag === "drink" ? item.categoryName === "ドリンク" : item.categoryName !== "ドリンク");
+
   return (
     <div className="space-y-4 px-3 py-2">
-      {menu.map((item) => {
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-line bg-canvas p-1">
+        <button
+          type="button"
+          onClick={() => setActiveTag("yakitori")}
+          className={`rounded-xl px-3 py-3 text-sm font-black ${activeTag === "yakitori" ? "bg-brand-indigo text-white" : "text-sub"}`}
+        >
+          焼き鳥
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTag("drink")}
+          className={`rounded-xl px-3 py-3 text-sm font-black ${activeTag === "drink" ? "bg-brand-gold text-white" : "text-sub"}`}
+        >
+          ドリンク
+        </button>
+      </div>
+
+      {visibleMenu.map((item) => {
         const isSoldout = !item.isAvailable || isOptionSoldout(item) || (item.isSet && isBundleSoldout(item));
         const hasOptions = item.optionGroups.length > 0;
 

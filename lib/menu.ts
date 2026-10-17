@@ -2,7 +2,7 @@ import { BundleSelection, BundleSlot, MenuItem, MenuOption, MenuOptionGroup, Ord
 import { supabase } from "./supabase";
 
 export const MENU_ITEMS: MenuItem[] = [
-  { id: 1, code: 1, categoryId: 1, name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
+  { id: 1, code: 1, categoryId: 1, categoryName: "通常メニュー", name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
   { id: 2, code: 2, categoryId: 1, name: "かき氷", price: 250, emoji: "🍧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
   { id: 3, code: 3, categoryId: 1, name: "コーラ", price: 150, emoji: "🥤", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
   { id: 4, code: 4, categoryId: 1, name: "水", price: 100, emoji: "💧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
@@ -65,11 +65,12 @@ type YakitoriTypeRow = {
   is_active: boolean;
 };
 
-function fromRow(row: MenuItemRow): MenuItem {
+function fromRow(row: MenuItemRow, categoryNames?: Map<number, string>): MenuItem {
   return {
     id: row.id,
     code: row.code ?? row.id,
     categoryId: row.category_id,
+    categoryName: row.category_id === null ? undefined : categoryNames?.get(row.category_id),
     name: row.name,
     price: row.price,
     emoji: row.emoji ?? undefined,
@@ -201,9 +202,14 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
       return MENU_ITEMS;
     }
 
-    const optionRows = await fetchOptionRows(true);
+    const [{ data: categories, error: categoriesError }, optionRows] = await Promise.all([
+      supabase.from("categories").select("id, name"),
+      fetchOptionRows(true),
+    ]);
+    if (categoriesError) throw categoriesError;
+    const categoryNames = new Map((categories ?? []).map((category) => [category.id as number, category.name as string]));
     return attachBundleSlots(
-      attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options),
+      attachOptionGroups((data ?? []).map((row) => fromRow(row, categoryNames)), optionRows.groups, optionRows.options),
       optionRows.bundleSlots
     );
   } catch {
@@ -219,9 +225,14 @@ export async function fetchAllMenuItemsForAdmin(): Promise<MenuItem[]> {
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
-  const optionRows = await fetchOptionRows(false);
+  const [{ data: categories, error: categoriesError }, optionRows] = await Promise.all([
+    supabase.from("categories").select("id, name"),
+    fetchOptionRows(false),
+  ]);
+  if (categoriesError) throw categoriesError;
+  const categoryNames = new Map((categories ?? []).map((category) => [category.id as number, category.name as string]));
   return attachBundleSlots(
-    attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options),
+    attachOptionGroups((data ?? []).map((row) => fromRow(row, categoryNames)), optionRows.groups, optionRows.options),
     optionRows.bundleSlots
   );
 }
