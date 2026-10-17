@@ -44,7 +44,11 @@ export default function BoardPage() {
     };
     updateVoices();
     speechSynthesis.addEventListener("voiceschanged", updateVoices);
-    return () => speechSynthesis.removeEventListener("voiceschanged", updateVoices);
+    const voicePoll = window.setInterval(updateVoices, 500);
+    return () => {
+      speechSynthesis.removeEventListener("voiceschanged", updateVoices);
+      window.clearInterval(voicePoll);
+    };
   }, []);
 
   useEffect(() => {
@@ -53,19 +57,25 @@ export default function BoardPage() {
     const newlyReadyOrders = currentReadyOrders.filter((order) => !previousReadyIdsRef.current.has(order.id));
     previousReadyIdsRef.current = currentReadyIds;
 
-    if (newlyReadyOrders.length === 0 || !audioEnabled) return;
-    const audio = notificationAudioRef.current;
-    if (audio) playNotificationAudio(audio);
+    if (newlyReadyOrders.length === 0) return;
+    if (audioEnabled) {
+      const audio = notificationAudioRef.current;
+      if (audio) playNotificationAudio(audio);
+    }
 
     if (speechEnabled && hasJapaneseVoice && "speechSynthesis" in window && "SpeechSynthesisUtterance" in window) {
       const speechSynthesis = window.speechSynthesis;
       for (const order of newlyReadyOrders) {
         const voice = speechSynthesis.getVoices().find((candidate) => candidate.lang.toLowerCase().startsWith("ja"));
         if (!voice) break;
-        const utterance = new SpeechSynthesisUtterance(`${order.number.replace("-", "番")}のお客様`);
+        const utterance = new SpeechSynthesisUtterance(`${order.number}番のお客様`);
         utterance.lang = voice.lang;
         utterance.voice = voice;
-        speechSynthesis.speak(utterance);
+        try {
+          speechSynthesis.speak(utterance);
+        } catch {
+          // Speech synthesis is best effort only.
+        }
       }
     }
   }, [audioEnabled, hasJapaneseVoice, orders, speechEnabled]);
