@@ -1,13 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, optionSnapshots, optionUnitPrice, resolveMenuOptions } from "@/lib/menu";
+import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, findMenuItemByCode, optionSnapshots, optionUnitPrice, resolveBundleSelections, resolveMenuOptionsByCodes } from "@/lib/menu";
 import { NewOrderItem, placeOrder } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import CameraQrScanner from "@/app/components/pos/CameraQrScanner";
-import { MenuItem, Order, OrderItemOptionSnapshot, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
+import { BundleSelection, MenuItem, Order, OrderItemOptionSnapshot, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
 import { supabase } from "@/lib/supabase";
 
 type ScanMode = "camera" | "manual";
@@ -20,6 +20,7 @@ type ScannedLineItem = {
   qty: number;
   yakitoriSelections?: OrderItemYakitoriSelection[];
   optionsSnapshot?: OrderItemOptionSnapshot[];
+  bundleSelections?: BundleSelection[];
 };
 
 export default function PosAPage() {
@@ -79,20 +80,25 @@ export default function PosAPage() {
     let missing = false;
 
     qrPayload.items.forEach((item, index) => {
-      const menuItem = menu.find((menuEntry) => menuEntry.id === item.menuId);
+      const menuItem = findMenuItemByCode(menu, item.menuCode);
       if (!menuItem) {
         missing = true;
         return;
       }
 
-      const options = resolveMenuOptions(menuItem, item.optionIds);
+      const options = resolveMenuOptionsByCodes(menuItem, item.optionCodes);
       if (!options) {
+        missing = true;
+        return;
+      }
+      const bundleSelections = menuItem.isSet ? resolveBundleSelections(menuItem, item.bundleSelections) : item.bundleSelections === undefined ? [] : null;
+      if (bundleSelections === null) {
         missing = true;
         return;
       }
       const resolvedOptions = options ?? [];
       const optionsSnapshot = optionSnapshots(menuItem, resolvedOptions);
-      const lineKey = `${item.menuId}:${resolvedOptions.map((option) => option.id).sort((a, b) => a - b).join(",")}`;
+      const lineKey = `${menuItem.code}:${resolvedOptions.map((option) => option.code).sort((a, b) => a - b).join(",")}:${(bundleSelections ?? []).map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",")}`;
 
       // 焼き鳥セットは串の選択が異なりうるため、同じ商品IDでもqtyでまとめず1回の購入=1行として扱う。
       if (item.yakitoriSelections) {
@@ -109,23 +115,25 @@ export default function PosAPage() {
 
         setLines.push({
           key: `set-${index}`,
-          menuId: item.menuId,
+          menuId: menuItem.id,
           name: menuItem.name,
-          price: optionUnitPrice(menuItem, resolvedOptions),
+          price: menuItem.isSet ? menuItem.price : optionUnitPrice(menuItem, resolvedOptions),
           qty: item.qty,
           yakitoriSelections: resolved,
           optionsSnapshot,
+          bundleSelections: bundleSelections ?? [],
         });
         return;
       }
 
       const current = merged.get(lineKey) ?? {
         key: `plain-${lineKey}`,
-        menuId: item.menuId,
+        menuId: menuItem.id,
         name: menuItem.name,
-        price: optionUnitPrice(menuItem, resolvedOptions),
+        price: menuItem.isSet ? menuItem.price : optionUnitPrice(menuItem, resolvedOptions),
         qty: 0,
         optionsSnapshot,
+        bundleSelections: bundleSelections ?? [],
       };
 
       current.qty += item.qty;
@@ -178,6 +186,7 @@ export default function PosAPage() {
         qty: item.qty,
         yakitoriSelections: item.yakitoriSelections,
         optionsSnapshot: item.optionsSnapshot,
+        bundleSelections: item.bundleSelections,
       }));
       const order = await placeOrder(qrPayload.orderId, "A", items);
       setConfirmedOrder(order);
@@ -332,6 +341,11 @@ export default function PosAPage() {
                         {item.optionsSnapshot.map((option) => `${option.groupName}: ${option.name}`).join(" / ")}
                       </span>
                     )}
+                    {item.bundleSelections && item.bundleSelections.length > 0 && (
+                      <span className="block text-xs font-bold text-brand-indigo">
+                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                      </span>
+                    )}
                     {item.yakitoriSelections && (
                       <span className="block text-xs text-sub">
                         {item.yakitoriSelections
@@ -352,7 +366,7 @@ export default function PosAPage() {
 
           {hasMissingItems && (
             <p className="mt-3 text-sm text-brand-vermilion">
-              QR内の商品IDに対応する商品が見つからないため、番号発行はできません。
+              QR内の商品・選択肢コードを現在のメニューで解決できないため、番号発行はできません。
             </p>
           )}
 

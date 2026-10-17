@@ -11,7 +11,7 @@ import { fetchOrder } from "@/lib/orders";
 import { createOrderId } from "@/lib/qr";
 import { supabase } from "@/lib/supabase";
 import { loadCustomerSession, saveCustomerSession } from "@/lib/customerSession";
-import { CartItem, MenuItem, MenuOption, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
+import { BundleSelection, CartItem, MenuItem, MenuOption, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 
 type CustomerStep = "menu" | "checkout" | "waiting" | "welcome";
 type TabType = "menu" | "cart";
@@ -236,6 +236,17 @@ export default function Home() {
     });
   }
 
+  function addBundleSetToCart(menuItem: MenuItem, selections: BundleSelection[]) {
+    const lineKey = selections
+      .map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`)
+      .join(",");
+    setCart((prev) => {
+      const existing = prev.find((item) => item.menuItem.id === menuItem.id && item.bundleSelections?.map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",") === lineKey);
+      if (existing) return prev.map((item) => item === existing ? { ...item, qty: item.qty + 1 } : item);
+      return [...prev, { menuItem, qty: 1, lineId: `bundle-${menuItem.id}-${lineKey}`, bundleSelections: selections }];
+    });
+  }
+
   function removeYakitoriSetFromCart(lineId: string) {
     setCart((prev) => prev.filter((item) => item.lineId !== lineId));
   }
@@ -337,6 +348,7 @@ export default function Home() {
               onChangeQty={changeQty}
               onAddItem={addItemToCart}
               onAddYakitoriSet={addYakitoriSetToCart}
+              onAddBundleSet={addBundleSetToCart}
             />
           ) : (
             <CartPanel

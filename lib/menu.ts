@@ -1,15 +1,16 @@
-import { MenuItem, MenuOption, MenuOptionGroup, OrderItemOptionSnapshot, YakitoriFlavor, YakitoriType } from "@/types";
+import { BundleSelection, BundleSlot, MenuItem, MenuOption, MenuOptionGroup, OrderItemOptionSnapshot, YakitoriFlavor, YakitoriType } from "@/types";
 import { supabase } from "./supabase";
 
 export const MENU_ITEMS: MenuItem[] = [
-  { id: 1, categoryId: 1, name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
-  { id: 2, categoryId: 1, name: "かき氷", price: 250, emoji: "🍧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
-  { id: 3, categoryId: 1, name: "コーラ", price: 150, emoji: "🥤", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
-  { id: 4, categoryId: 1, name: "水", price: 100, emoji: "💧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
+  { id: 1, code: 1, categoryId: 1, name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
+  { id: 2, code: 2, categoryId: 1, name: "かき氷", price: 250, emoji: "🍧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
+  { id: 3, code: 3, categoryId: 1, name: "コーラ", price: 150, emoji: "🥤", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
+  { id: 4, code: 4, categoryId: 1, name: "水", price: 100, emoji: "💧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
 ];
 
 type MenuItemRow = {
   id: number;
+  code?: number;
   category_id: number | null;
   name: string;
   price: number;
@@ -18,6 +19,7 @@ type MenuItemRow = {
   is_active: boolean;
   is_yakitori_set: boolean;
   yakitori_skewer_count: number | null;
+  is_set?: boolean;
 };
 
 type OptionGroupRow = {
@@ -30,11 +32,22 @@ type OptionGroupRow = {
 
 type OptionRow = {
   id: number;
+  code?: number;
   group_id: number;
   name: string;
   price_delta: number;
   is_available: boolean;
   is_active: boolean;
+  display_order: number;
+};
+
+type BundleSlotRow = {
+  id: number;
+  set_item_id: number;
+  name: string;
+  kind: "fixed" | "category";
+  fixed_item_id: number | null;
+  source_category_id: number | null;
   display_order: number;
 };
 
@@ -55,6 +68,7 @@ type YakitoriTypeRow = {
 function fromRow(row: MenuItemRow): MenuItem {
   return {
     id: row.id,
+    code: row.code ?? row.id,
     categoryId: row.category_id,
     name: row.name,
     price: row.price,
@@ -64,12 +78,15 @@ function fromRow(row: MenuItemRow): MenuItem {
     isYakitoriSet: row.is_yakitori_set,
     yakitoriSkewerCount: row.yakitori_skewer_count,
     optionGroups: [],
+    isSet: row.is_set ?? false,
+    bundleSlots: [],
   };
 }
 
 function optionFromRow(row: OptionRow): MenuOption {
   return {
     id: row.id,
+    code: row.code ?? row.id,
     groupId: row.group_id,
     name: row.name,
     priceDelta: row.price_delta,
@@ -111,18 +128,31 @@ function attachOptionGroups(
   }));
 }
 
-async function fetchOptionRows(activeOnly: boolean): Promise<{ groups: OptionGroupRow[]; options: OptionRow[] }> {
+async function fetchOptionRows(activeOnly: boolean): Promise<{
+  groups: OptionGroupRow[];
+  options: OptionRow[];
+  bundleSlots: BundleSlotRow[];
+}> {
   const groupsQuery = supabase.from("option_groups").select("*").order("display_order", { ascending: true });
   let optionsQuery = supabase.from("options").select("*").order("display_order", { ascending: true });
   if (activeOnly) optionsQuery = optionsQuery.eq("is_active", true);
 
+  const { data: bundleSlots, error: bundleSlotsError } = await supabase
+    .from("bundle_slots")
+    .select("*")
+    .order("display_order", { ascending: true });
   const [{ data: groups, error: groupsError }, { data: options, error: optionsError }] = await Promise.all([
     groupsQuery,
     optionsQuery,
   ]);
   if (groupsError) throw groupsError;
   if (optionsError) throw optionsError;
-  return { groups: (groups ?? []) as OptionGroupRow[], options: (options ?? []) as OptionRow[] };
+  if (bundleSlotsError) throw bundleSlotsError;
+  return {
+    groups: (groups ?? []) as OptionGroupRow[],
+    options: (options ?? []) as OptionRow[],
+    bundleSlots: (bundleSlots ?? []) as BundleSlotRow[],
+  };
 }
 
 function flavorFromRow(row: YakitoriFlavorRow): YakitoriFlavor {
@@ -131,6 +161,30 @@ function flavorFromRow(row: YakitoriFlavorRow): YakitoriFlavor {
 
 function typeFromRow(row: YakitoriTypeRow): YakitoriType {
   return { id: row.id, name: row.name, sortOrder: row.sort_order, isActive: row.is_active };
+}
+
+function attachBundleSlots(items: MenuItem[], rows: BundleSlotRow[]): MenuItem[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return items.map((item) => ({
+    ...item,
+    bundleSlots: rows
+      .filter((row) => row.set_item_id === item.id)
+      .sort((a, b) => a.display_order - b.display_order)
+      .map((row): BundleSlot => ({
+        id: row.id,
+        setItemId: row.set_item_id,
+        name: row.name,
+        kind: row.kind,
+        fixedItemId: row.fixed_item_id,
+        sourceCategoryId: row.source_category_id,
+        displayOrder: row.display_order,
+        candidateItems: Array.from(byId.values()).filter((candidate) =>
+          row.kind === "fixed"
+            ? candidate.id === row.fixed_item_id
+            : candidate.categoryId === row.source_category_id && candidate.isActive
+        ),
+      })),
+  }));
 }
 
 // お客さん画面・レジ画面用: 廃止(is_active=false)された品目は返さない
@@ -148,7 +202,10 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
     }
 
     const optionRows = await fetchOptionRows(true);
-    return attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options);
+    return attachBundleSlots(
+      attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options),
+      optionRows.bundleSlots
+    );
   } catch {
     return MENU_ITEMS;
   }
@@ -163,7 +220,10 @@ export async function fetchAllMenuItemsForAdmin(): Promise<MenuItem[]> {
 
   if (error) throw error;
   const optionRows = await fetchOptionRows(false);
-  return attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options);
+  return attachBundleSlots(
+    attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options),
+    optionRows.bundleSlots
+  );
 }
 
 export function resolveMenuOptions(menuItem: MenuItem, optionIds: number[] | undefined): MenuOption[] | null {
@@ -178,6 +238,43 @@ export function resolveMenuOptions(menuItem: MenuItem, optionIds: number[] | und
   if (selectedGroups.size !== selectedOptions.length) return null;
   if (menuItem.optionGroups.some((group) => group.required && !selectedGroups.has(group.id))) return null;
   return selectedOptions;
+}
+
+export function findMenuItemByCode(items: MenuItem[], code: number): MenuItem | null {
+  return items.find((item) => item.code === code) ?? null;
+}
+
+export function resolveMenuOptionsByCodes(menuItem: MenuItem, optionCodes: number[] | undefined): MenuOption[] | null {
+  if (optionCodes === undefined) return resolveMenuOptions(menuItem, undefined);
+  const options = menuItem.optionGroups.flatMap((group) => group.options);
+  const ids = optionCodes.map((code) => options.find((option) => option.code === code)?.id);
+  if (ids.some((id) => id === undefined)) return null;
+  return resolveMenuOptions(menuItem, ids as number[]);
+}
+
+export function resolveBundleSelections(
+  setItem: MenuItem,
+  selections: { slotId: number; menuCode: number; optionCodes?: number[] }[] | undefined
+): BundleSelection[] | null {
+  if (!setItem.isSet || !selections || selections.length !== setItem.bundleSlots.length) return null;
+  const selectedSlotIds = new Set<number>();
+  const resolved: BundleSelection[] = [];
+
+  for (const selection of selections) {
+    if (selectedSlotIds.has(selection.slotId)) return null;
+    selectedSlotIds.add(selection.slotId);
+    const slot = setItem.bundleSlots.find((candidate) => candidate.id === selection.slotId);
+    if (!slot) return null;
+    const candidate = slot.candidateItems.find((item) => item.code === selection.menuCode);
+    if (!candidate || !candidate.isActive || !candidate.isAvailable) return null;
+    if (slot.kind === "fixed" && candidate.id !== slot.fixedItemId) return null;
+    const options = resolveMenuOptionsByCodes(candidate, selection.optionCodes);
+    if (!options) return null;
+    resolved.push({ slotId: slot.id, slotName: slot.name, menuItem: candidate, options });
+  }
+
+  if (selectedSlotIds.size !== setItem.bundleSlots.length) return null;
+  return resolved.sort((a, b) => a.slotId - b.slotId);
 }
 
 export function optionUnitPrice(menuItem: MenuItem, options: MenuOption[]): number {
@@ -197,9 +294,18 @@ export function optionSnapshots(menuItem: MenuItem, options: MenuOption[]): Orde
 export async function createMenuItem(
   item: Pick<MenuItem, "name" | "price"> & Partial<Pick<MenuItem, "isYakitoriSet" | "yakitoriSkewerCount">>
 ): Promise<void> {
+  const { data: latest, error: latestError } = await supabase
+    .from("menu_items")
+    .select("code")
+    .order("code", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (latestError) throw latestError;
+
   const { error } = await supabase.from("menu_items").insert({
     name: item.name,
     price: item.price,
+    code: ((latest as { code?: number } | null)?.code ?? 0) + 1,
     is_yakitori_set: item.isYakitoriSet ?? false,
     yakitori_skewer_count: item.isYakitoriSet ? item.yakitoriSkewerCount : null,
   });

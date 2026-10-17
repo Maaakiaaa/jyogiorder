@@ -40,6 +40,11 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
                   }).join(" / ")}
                 </p>
               )}
+              {c.bundleSelections && c.bundleSelections.length > 0 && (
+                <p className="mt-1 text-xs font-bold text-brand-indigo">
+                  {c.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                </p>
+              )}
               {c.yakitoriSelections ? (
                 <p className="mt-1 text-sm text-sub">
                   ¥{(c.menuItem.price + (c.options ?? []).reduce((sum, option) => sum + option.priceDelta, 0)).toLocaleString()} ・{" "}
@@ -56,7 +61,7 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
               >
                 削除
               </button>
-            ) : c.options && c.options.length > 0 && c.lineId ? (
+            ) : ((c.options && c.options.length > 0) || (c.bundleSelections && c.bundleSelections.length > 0)) && c.lineId ? (
               <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
                 <button
                   onClick={() => onChangeLineQty(c.lineId as string, -1)}

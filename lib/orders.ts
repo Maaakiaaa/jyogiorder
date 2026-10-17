@@ -8,7 +8,7 @@ import {
   recordPendingOrderFailure,
   removePendingOrder,
 } from "./offlineQueue";
-import { Order, OrderItem, OrderItemOptionSnapshot, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
+import { BundleSelection, Order, OrderItem, OrderItemOptionSnapshot, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
 
 type OrderRow = {
   id: string;
@@ -29,6 +29,9 @@ type OrderItemRow = {
   qty: number;
   yakitori_selections: OrderItemYakitoriSelection[] | null;
   options_snapshot: OrderItemOptionSnapshot[] | null;
+  id: number;
+  line_id: string | null;
+  parent_line_id: string | null;
 };
 
 function fromRows(order: OrderRow, items: OrderItemRow[]): Order {
@@ -48,6 +51,8 @@ function fromRows(order: OrderRow, items: OrderItemRow[]): Order {
       qty: item.qty,
       yakitoriSelections: item.yakitori_selections ?? undefined,
       optionsSnapshot: item.options_snapshot ?? undefined,
+      lineId: item.line_id ?? String(item.id),
+      parentLineId: item.parent_line_id,
     })),
   };
 }
@@ -69,6 +74,8 @@ export type NewOrderItem = {
   qty: number;
   yakitoriSelections?: OrderItemYakitoriSelection[];
   optionsSnapshot?: OrderItemOptionSnapshot[];
+  bundleSelections?: BundleSelection[];
+  lineId?: string;
 };
 
 // fetchOrder()はUI側のポーリング用に「取得できなければnull」という緩い契約にしているため、
@@ -154,17 +161,42 @@ export async function placeOrder(
       throw insertOrderError;
     }
 
-    const { error: insertItemsError } = await supabase.from("order_items").insert(
-      items.map((item) => ({
+    const expandedItems = items.flatMap((item, index) => {
+      const parentLineId = item.lineId ?? `${orderId}:line:${index}`;
+      const parent = {
         order_id: orderId,
+        line_id: parentLineId,
+        parent_line_id: null,
         menu_item_id: item.menuItemId,
         name_snapshot: item.name,
         price_snapshot: item.price,
         qty: item.qty,
         yakitori_selections: item.yakitoriSelections ?? null,
         options_snapshot: item.optionsSnapshot ?? null,
-      }))
-    );
+      };
+      if (!item.bundleSelections || item.bundleSelections.length === 0) return [parent];
+      return [
+        parent,
+        ...item.bundleSelections.map((selection) => ({
+          order_id: orderId,
+          line_id: `${parentLineId}:slot:${selection.slotId}`,
+          parent_line_id: parentLineId,
+          menu_item_id: selection.menuItem.id,
+          name_snapshot: `${selection.slotName}: ${selection.menuItem.name}`,
+          price_snapshot: 0,
+          qty: item.qty,
+          yakitori_selections: null,
+          options_snapshot: selection.options.length > 0 ? selection.options.map((option) => ({
+            id: option.id,
+            groupId: option.groupId,
+            groupName: selection.menuItem.optionGroups.find((group) => group.id === option.groupId)?.name ?? "選択肢",
+            name: option.name,
+            priceDelta: option.priceDelta,
+          })) : null,
+        })),
+      ];
+    });
+    const { error: insertItemsError } = await supabase.from("order_items").insert(expandedItems);
 
     if (insertItemsError) throw insertItemsError;
 

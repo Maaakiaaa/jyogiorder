@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { CartItem, MenuItem, MenuOption, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
+import { BundleSelection, CartItem, MenuItem, MenuOption, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 import YakitoriSetModal from "@/app/components/shared/YakitoriSetModal";
 import MenuOptionsModal from "@/app/components/shared/MenuOptionsModal";
+import BundleSetModal from "@/app/components/shared/BundleSetModal";
 
 interface Props {
   menu: MenuItem[];
@@ -13,6 +14,7 @@ interface Props {
   onChangeQty: (id: number, delta: number) => void;
   onAddItem: (menuItem: MenuItem, options?: MenuOption[]) => void;
   onAddYakitoriSet: (menuItem: MenuItem, selections: YakitoriSkewerSelection[], options?: MenuOption[]) => void;
+  onAddBundleSet: (menuItem: MenuItem, selections: BundleSelection[]) => void;
 }
 
 export default function MenuPanel({
@@ -23,9 +25,11 @@ export default function MenuPanel({
   onChangeQty,
   onAddItem,
   onAddYakitoriSet,
+  onAddBundleSet,
 }: Props) {
   const [setModalItem, setSetModalItem] = useState<MenuItem | null>(null);
   const [optionsModalItem, setOptionsModalItem] = useState<MenuItem | null>(null);
+  const [bundleModalItem, setBundleModalItem] = useState<MenuItem | null>(null);
   const [pendingOptions, setPendingOptions] = useState<MenuOption[] | undefined>();
 
   function getQty(id: number) {
@@ -37,15 +41,19 @@ export default function MenuPanel({
   }
 
   function isOptionSoldout(item: MenuItem) {
-    return item.optionGroups.some(
+    return !item.isAvailable || !item.isActive || item.optionGroups.some(
       (group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)
     );
+  }
+
+  function isBundleSoldout(item: MenuItem) {
+    return item.bundleSlots.some((slot) => slot.candidateItems.length === 0 || slot.candidateItems.every(isOptionSoldout));
   }
 
   return (
     <div className="space-y-4 px-3 py-2">
       {menu.map((item) => {
-        const isSoldout = !item.isAvailable || isOptionSoldout(item);
+        const isSoldout = !item.isAvailable || isOptionSoldout(item) || (item.isSet && isBundleSoldout(item));
         const hasOptions = item.optionGroups.length > 0;
 
         return (
@@ -71,7 +79,15 @@ export default function MenuPanel({
               <p className="mt-1 text-sm font-semibold text-brand-indigo">¥{item.price}</p>
             </div>
 
-            {item.isYakitoriSet ? (
+            {item.isSet ? (
+              <button
+                onClick={() => setBundleModalItem(item)}
+                disabled={isSoldout}
+                className="rounded-xl border border-brand-indigo/40 bg-brand-indigo/10 px-3 py-3 text-xs font-bold text-brand-indigo disabled:opacity-30"
+              >
+                セット内容を選ぶ
+              </button>
+            ) : item.isYakitoriSet ? (
               <button
                 onClick={() => {
                   if (hasOptions) {
@@ -150,6 +166,17 @@ export default function MenuPanel({
             }
             onAddItem(optionsModalItem, options);
             setOptionsModalItem(null);
+          }}
+        />
+      )}
+
+      {bundleModalItem && (
+        <BundleSetModal
+          menuItem={bundleModalItem}
+          onCancel={() => setBundleModalItem(null)}
+          onConfirm={(selections) => {
+            onAddBundleSet(bundleModalItem, selections);
+            setBundleModalItem(null);
           }}
         />
       )}

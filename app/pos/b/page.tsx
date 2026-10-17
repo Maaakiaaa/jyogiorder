@@ -8,7 +8,8 @@ import { createOrderId } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import YakitoriSetModal from "@/app/components/shared/YakitoriSetModal";
 import MenuOptionsModal from "@/app/components/shared/MenuOptionsModal";
-import { MenuItem, MenuOption, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
+import BundleSetModal from "@/app/components/shared/BundleSetModal";
+import { BundleSelection, MenuItem, MenuOption, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 import { supabase } from "@/lib/supabase";
 
 type BCartItem = {
@@ -17,6 +18,7 @@ type BCartItem = {
   lineId?: string;
   yakitoriSelections?: YakitoriSkewerSelection[];
   options?: MenuOption[];
+  bundleSelections?: BundleSelection[];
 };
 
 export default function PosBPage() {
@@ -25,6 +27,7 @@ export default function PosBPage() {
   const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [setModalItem, setSetModalItem] = useState<MenuItem | null>(null);
   const [optionsModalItem, setOptionsModalItem] = useState<MenuItem | null>(null);
+  const [bundleModalItem, setBundleModalItem] = useState<MenuItem | null>(null);
   const [pendingOptions, setPendingOptions] = useState<MenuOption[] | undefined>();
   const [cart, setCart] = useState<BCartItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -71,6 +74,10 @@ export default function PosBPage() {
   function addItem(menuItem: MenuItem) {
     setConfirmedOrder(null);
 
+    if (menuItem.isSet) {
+      setBundleModalItem(menuItem);
+      return;
+    }
     if (menuItem.optionGroups.length > 0) {
       setOptionsModalItem(menuItem);
       return;
@@ -114,6 +121,16 @@ export default function PosBPage() {
     setSetModalItem(null);
   }
 
+  function addBundleSetToCart(menuItem: MenuItem, selections: BundleSelection[]) {
+    setConfirmedOrder(null);
+    const lineKey = selections.map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",");
+    setCart((prev) => {
+      const existing = prev.find((item) => item.menuItem.id === menuItem.id && item.bundleSelections?.map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",") === lineKey);
+      if (existing) return prev.map((item) => item === existing ? { ...item, qty: item.qty + 1 } : item);
+      return [...prev, { menuItem, qty: 1, lineId: `bundle-${menuItem.id}-${lineKey}`, bundleSelections: selections }];
+    });
+  }
+
   function removeYakitoriSetFromCart(lineId: string) {
     setCart((prev) => prev.filter((item) => item.lineId !== lineId));
   }
@@ -146,6 +163,7 @@ export default function PosBPage() {
           typeName: s.typeName,
         })),
         optionsSnapshot: item.options && item.options.length > 0 ? optionSnapshots(item.menuItem, item.options) : undefined,
+        bundleSelections: item.bundleSelections,
       }));
       const order = await placeOrder(createOrderId(), "B", items);
       setConfirmedOrder(order);
@@ -197,7 +215,7 @@ export default function PosBPage() {
               <button
                 key={item.id}
                 onClick={() => addItem(item)}
-                disabled={!item.isAvailable || item.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive))}
+                disabled={!item.isAvailable || item.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)) || (item.isSet && item.bundleSlots.some((slot) => slot.candidateItems.length === 0 || slot.candidateItems.every((candidate) => !candidate.isAvailable || !candidate.isActive || candidate.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)))))}
                 className="rounded-xl border border-line bg-surface px-3 py-3 text-left text-sm text-ink disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="block font-bold">
@@ -240,6 +258,11 @@ export default function PosBPage() {
                         }).join(" / ")}
                       </span>
                     )}
+                    {item.bundleSelections && item.bundleSelections.length > 0 && (
+                      <span className="block text-xs font-bold text-brand-indigo">
+                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                      </span>
+                    )}
                   </div>
                   {item.yakitoriSelections ? (
                     <div className="flex items-center gap-2">
@@ -250,6 +273,13 @@ export default function PosBPage() {
                       >
                         削除
                       </button>
+                    </div>
+                  ) : item.bundleSelections ? (
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setCart((prev) => prev.map((entry) => entry.lineId === item.lineId ? { ...entry, qty: entry.qty - 1 } : entry).filter((entry) => entry.qty > 0))} className="h-7 w-7 rounded-full border border-line text-brand-indigo">−</button>
+                      <span className="w-6 text-center">{item.qty}</span>
+                      <button onClick={() => setCart((prev) => prev.map((entry) => entry.lineId === item.lineId ? { ...entry, qty: entry.qty + 1 } : entry))} className="h-7 w-7 rounded-full border border-line text-brand-indigo">+</button>
+                      <span className="ml-2 w-16 text-right">¥{(item.menuItem.price * item.qty).toLocaleString()}</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -321,6 +351,17 @@ export default function PosBPage() {
             }
             addOptionsToCart(optionsModalItem, options);
             setOptionsModalItem(null);
+          }}
+        />
+      )}
+
+      {bundleModalItem && (
+        <BundleSetModal
+          menuItem={bundleModalItem}
+          onCancel={() => setBundleModalItem(null)}
+          onConfirm={(selections) => {
+            addBundleSetToCart(bundleModalItem, selections);
+            setBundleModalItem(null);
           }}
         />
       )}

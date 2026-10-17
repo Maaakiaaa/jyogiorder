@@ -19,16 +19,21 @@ export default function CheckoutPanel({ cart, total, orderId, timedOut, onBack }
 
   const qrPayload = useMemo<QrOrderPayload>(
     () => ({
-      version: 1,
+      version: 2,
       orderId,
       items: cart.map((item) => ({
-        menuId: item.menuItem.id,
+        menuCode: item.menuItem.code,
         qty: item.qty,
         yakitoriSelections: item.yakitoriSelections?.map((s) => ({
           flavorId: s.flavorId,
           typeId: s.typeId,
         })),
-        optionIds: item.options?.map((option) => option.id),
+        optionCodes: item.options?.map((option) => option.code),
+        bundleSelections: item.bundleSelections?.map((selection) => ({
+          slotId: selection.slotId,
+          menuCode: selection.menuItem.code,
+          optionCodes: selection.options.length > 0 ? selection.options.map((option) => option.code) : undefined,
+        })),
       })),
     }),
     [cart, orderId]

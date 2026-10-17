@@ -133,6 +133,7 @@ export default function AdminPage() {
 
     for (const order of salesOrders) {
       for (const item of order.items) {
+        if (item.parentLineId) continue;
         const current = salesMap.get(item.name) ?? { name: item.name, qty: 0, amount: 0 };
         current.qty += item.qty;
         current.amount += item.qty * item.price;

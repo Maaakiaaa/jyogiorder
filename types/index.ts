@@ -3,6 +3,7 @@ export type OrderPrefix = "A" | "B";
 
 export interface MenuOption {
   id: number;
+  code: number;
   groupId: number;
   name: string;
   priceDelta: number;
@@ -20,8 +21,22 @@ export interface MenuOptionGroup {
   options: MenuOption[];
 }
 
+export type BundleSlotKind = "fixed" | "category";
+
+export interface BundleSlot {
+  id: number;
+  setItemId: number;
+  name: string;
+  kind: BundleSlotKind;
+  fixedItemId: number | null;
+  sourceCategoryId: number | null;
+  displayOrder: number;
+  candidateItems: MenuItem[];
+}
+
 export interface MenuItem {
   id: number;
+  code: number;
   categoryId: number | null;
   name: string;
   price: number;
@@ -31,6 +46,8 @@ export interface MenuItem {
   isYakitoriSet: boolean;
   yakitoriSkewerCount: number | null;
   optionGroups: MenuOptionGroup[];
+  isSet: boolean;
+  bundleSlots: BundleSlot[];
 }
 
 export interface YakitoriFlavor {
@@ -63,6 +80,22 @@ export interface CartItem {
   lineId?: string;
   yakitoriSelections?: YakitoriSkewerSelection[];
   options?: MenuOption[];
+  bundleSelections?: BundleSelection[];
+}
+
+export interface BundleSelection {
+  slotId: number;
+  slotName: string;
+  menuItem: MenuItem;
+  options: MenuOption[];
+}
+
+export interface OrderItemBundleSnapshot {
+  slotId: number;
+  slotName: string;
+  menuItemId: number;
+  name: string;
+  optionsSnapshot?: OrderItemOptionSnapshot[];
 }
 
 export interface QrYakitoriSkewerSelection {
@@ -71,14 +104,21 @@ export interface QrYakitoriSkewerSelection {
 }
 
 export interface QrCartItem {
-  menuId: number;
+  menuCode: number;
   qty: number;
   yakitoriSelections?: QrYakitoriSkewerSelection[];
-  optionIds?: number[];
+  optionCodes?: number[];
+  bundleSelections?: QrBundleSelection[];
+}
+
+export interface QrBundleSelection {
+  slotId: number;
+  menuCode: number;
+  optionCodes?: number[];
 }
 
 export interface QrOrderPayload {
-  version: 1;
+  version: 2;
   orderId: string;
   items: QrCartItem[];
 }
@@ -97,12 +137,15 @@ export interface OrderItemOptionSnapshot {
 }
 
 export interface OrderItem {
+  lineId?: string;
   menuItemId: number | null;
   name: string;
   price: number;
   qty: number;
   yakitoriSelections?: OrderItemYakitoriSelection[];
   optionsSnapshot?: OrderItemOptionSnapshot[];
+  parentLineId?: string | null;
+  bundleSnapshot?: OrderItemBundleSnapshot[];
 }
 
 export interface Order {
