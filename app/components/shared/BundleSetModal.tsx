@@ -25,22 +25,42 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
   }
 
   function selectOption(slotId: number, groupId: number, optionId: number) {
-    setSelectedOptions((previous) => ({
-      ...previous,
-      [slotId]: { ...(previous[slotId] ?? {}), [groupId]: optionId },
-    }));
+    const selectedItem = menuItem.bundleSlots
+      .find((slot) => slot.id === slotId)
+      ?.candidateItems.find((item) => item.id === selectedItems[slotId]);
+    const selectedGroup = selectedItem?.optionGroups.find((group) => group.id === groupId);
+    const selectedOption = selectedGroup?.options.find((option) => option.id === optionId);
+    const dilutionGroup = selectedItem?.optionGroups.find((group) => group.name === "割り方");
+    setSelectedOptions((previous) => {
+      const next = { ...(previous[slotId] ?? {}), [groupId]: optionId };
+      if (selectedGroup?.name === "温度" && selectedOption?.name === "ホット" && dilutionGroup) {
+        delete next[dilutionGroup.id];
+      }
+      return { ...previous, [slotId]: next };
+    });
+  }
+
+  function isCold(item: MenuItem, choices: Record<number, number>) {
+    const temperature = item.optionGroups.find((group) => group.name === "温度");
+    return temperature
+      ? ["アイス", "コールド"].includes(temperature.options.find((option) => option.id === choices[temperature.id])?.name ?? "")
+      : false;
+  }
+
+  function groupsToAsk(item: MenuItem, choices: Record<number, number>) {
+    const temperature = item.optionGroups.find((group) => group.name === "温度");
+    if (!temperature) return item.optionGroups;
+    if (choices[temperature.id] === undefined) return [temperature];
+    return isCold(item, choices)
+      ? item.optionGroups.filter((group) => group.name === "割り方")
+      : [];
   }
 
   const selections = menuItem.bundleSlots.map((slot) => {
     const selectedItem = slot.candidateItems.find((item) => item.id === selectedItems[slot.id]);
     if (!selectedItem) return null;
     const choices = selectedOptions[slot.id] ?? {};
-    const temperatureGroup = selectedItem.optionGroups.find((group) => group.name === "温度");
-    const isCold = temperatureGroup
-      ? temperatureGroup.options.find((option) => option.id === choices[temperatureGroup.id])?.name === "コールド"
-      : false;
-    const visibleGroups = selectedItem.optionGroups.filter((group) => group.name !== "割り方" || isCold);
-    const options = visibleGroups
+    const options = selectedItem.optionGroups
       .map((group) => group.options.find((option) => option.id === choices[group.id]))
       .filter((option): option is MenuOption => option !== undefined);
     return { slotId: slot.id, slotName: slot.name, menuItem: selectedItem, options } satisfies BundleSelection;
@@ -49,11 +69,11 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
   const isComplete = selections.every((selection) => {
     if (!selection) return false;
     const temperature = selection.menuItem.optionGroups.find((group) => group.name === "温度");
-    const isCold = temperature
-      ? selection.options.find((option) => option.groupId === temperature.id)?.name === "コールド"
+    const isColdSelection = temperature
+      ? ["アイス", "コールド"].includes(selection.options.find((option) => option.groupId === temperature.id)?.name ?? "")
       : false;
     return selection.menuItem.optionGroups.every((group) => {
-      if (group.name === "割り方" && !isCold) return true;
+      if (group.name === "割り方" && !isColdSelection) return true;
       return !group.required || selection.options.some((option) => option.groupId === group.id);
     });
   });
@@ -94,13 +114,12 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
                   ))}
                 </div>
 
-                {selectedItem && selectedItem.optionGroups.filter((group) => {
-                  if (group.name !== "割り方") return true;
-                  const temperature = selectedItem.optionGroups.find((candidate) => candidate.name === "温度");
-                  return temperature !== undefined && temperature.options.find((option) => option.id === choiceMap[temperature.id])?.name === "コールド";
-                }).map((group) => (
+                {selectedItem && groupsToAsk(selectedItem, choiceMap).map((group) => (
                   <div key={group.id} className="mt-3 border-t border-line pt-3">
-                    <p className="text-xs font-bold text-sub">{group.name}{group.required ? "（必須）" : "（任意）"}</p>
+                    <p className="text-xs font-bold text-sub">
+                      {group.name === "温度" ? "最初にホットかアイスかを選択" : group.name === "割り方" ? "次に水割りかソーダ割りを選択" : group.name}
+                      {group.required ? "（必須）" : "（任意）"}
+                    </p>
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       {group.options.map((option) => {
                         const disabled = !option.isAvailable || !option.isActive;
@@ -114,7 +133,7 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
                               choiceMap[group.id] === option.id ? "border-brand-gold bg-brand-gold text-white" : "border-line bg-surface text-sub"
                             }`}
                           >
-                            {option.name}{disabled ? "（売切）" : ""}
+                            {option.name === "コールド" ? "アイス" : option.name}{disabled ? "（売切）" : ""}
                           </button>
                         );
                       })}

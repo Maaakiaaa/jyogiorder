@@ -68,9 +68,9 @@ begin
     next_option_code := next_option_code + 1;
   end if;
 
-  if not exists (select 1 from options where group_id = temperature_group_id and name = 'コールド') then
+  if not exists (select 1 from options where group_id = temperature_group_id and name = 'アイス') then
     insert into options (group_id, name, price_delta, code, is_available, is_active, display_order)
-    values (temperature_group_id, 'コールド', 0, next_option_code, true, true, 2);
+    values (temperature_group_id, 'アイス', 0, next_option_code, true, true, 2);
     next_option_code := next_option_code + 1;
   end if;
 

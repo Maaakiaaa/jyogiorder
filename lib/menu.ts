@@ -275,7 +275,7 @@ export function resolveBundleSelections(
       ? options.find((option) => option.groupId === temperatureGroup.id)?.name
       : undefined;
     const dilutionGroup = candidate.optionGroups.find((group) => group.name === "割り方");
-    if (dilutionGroup && temperature === "コールド" && !options.some((option) => option.groupId === dilutionGroup.id)) return null;
+    if (dilutionGroup && ["アイス", "コールド"].includes(temperature ?? "") && !options.some((option) => option.groupId === dilutionGroup.id)) return null;
     if (dilutionGroup && temperature === "ホット" && options.some((option) => option.groupId === dilutionGroup.id)) return null;
     resolved.push({ slotId: slot.id, slotName: slot.name, menuItem: candidate, options });
   }
