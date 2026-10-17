@@ -12,11 +12,37 @@ interface Props {
 export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Props) {
   const [selectedByGroup, setSelectedByGroup] = useState<Record<number, number>>({});
   const availableGroups = menuItem.optionGroups;
-  const isComplete = availableGroups.every((group) => !group.required || selectedByGroup[group.id] !== undefined);
 
   function selectOption(groupId: number, optionId: number) {
-    setSelectedByGroup((previous) => ({ ...previous, [groupId]: optionId }));
+    const selectedGroup = availableGroups.find((group) => group.id === groupId);
+    const selectedOption = selectedGroup?.options.find((option) => option.id === optionId);
+    const dilutionGroup = availableGroups.find((group) => group.name === "割り方");
+    setSelectedByGroup((previous) => {
+      const next = { ...previous, [groupId]: optionId };
+      if (selectedGroup?.name === "温度" && selectedOption?.name === "ホット" && dilutionGroup) {
+        delete next[dilutionGroup.id];
+      }
+      return next;
+    });
   }
+
+  function isColdSelected() {
+    const temperatureGroup = availableGroups.find((group) => group.name === "温度");
+    const selected = temperatureGroup?.options.find((option) => option.id === selectedByGroup[temperatureGroup.id]);
+    return selected?.name === "アイス" || selected?.name === "コールド";
+  }
+
+  function groupsToAsk() {
+    const temperatureGroup = availableGroups.find((group) => group.name === "温度");
+    if (!temperatureGroup) return availableGroups;
+    if (selectedByGroup[temperatureGroup.id] === undefined) return [temperatureGroup];
+    return availableGroups.filter((group) => group.name !== "温度" && (group.name !== "割り方" || isColdSelected()));
+  }
+
+  const isComplete = availableGroups.every((group) => {
+    if (group.name === "割り方" && !isColdSelected()) return true;
+    return !group.required || selectedByGroup[group.id] !== undefined;
+  });
 
   function handleConfirm() {
     if (!isComplete) return;
@@ -35,10 +61,12 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
         </h2>
 
         <div className="mt-4 space-y-4">
-          {availableGroups.map((group) => (
+          {groupsToAsk().map((group) => (
             <section key={group.id} className="rounded-2xl border border-line bg-canvas p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-black text-ink">{group.name}</p>
+                <p className="text-sm font-black text-ink">
+                  {group.name === "温度" ? "最初にホットかアイスかを選択" : group.name === "割り方" ? "次に水割りかソーダ割りを選択" : group.name}
+                </p>
                 <span className={`text-xs font-bold ${group.required ? "text-brand-vermilion" : "text-sub"}`}>
                   {group.required ? "必須" : "任意"}
                 </span>
@@ -58,7 +86,7 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
                           : "border-line bg-surface text-sub"
                       }`}
                     >
-                      <span className="block">{option.name}</span>
+                      <span className="block">{option.name === "コールド" ? "アイス" : option.name}</span>
                       <span className="mt-1 block text-xs font-medium">
                         {option.priceDelta > 0 ? `+¥${option.priceDelta}` : option.priceDelta < 0 ? `-¥${Math.abs(option.priceDelta)}` : ""}
                         {disabled ? " ・売り切れ" : ""}
