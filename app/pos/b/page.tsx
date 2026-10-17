@@ -31,6 +31,7 @@ export default function PosBPage() {
   const [pendingOptions, setPendingOptions] = useState<MenuOption[] | undefined>();
   const [cart, setCart] = useState<BCartItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCheckoutConfirmation, setShowCheckoutConfirmation] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [nextNumber, setNextNumber] = useState("-");
@@ -168,6 +169,7 @@ export default function PosBPage() {
       const order = await placeOrder(createOrderId(), "B", items);
       setConfirmedOrder(order);
       setCart([]);
+      setShowCheckoutConfirmation(false);
     } catch {
       setError("番号発行に失敗しました。もう一度お試しください。");
     } finally {
@@ -309,14 +311,67 @@ export default function PosBPage() {
           )}
 
           <button
-            onClick={handleCheckout}
+            onClick={() => setShowCheckoutConfirmation(true)}
             disabled={cart.length === 0 || isSubmitting}
             className="neon-button mt-4 w-full rounded-2xl px-4 py-4 text-base font-black disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmitting ? "発行中..." : "会計・番号発行"}
+            {isSubmitting ? "発行中..." : "内容を確認して会計"}
           </button>
         </section>
       </div>
+
+      {showCheckoutConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 sm:items-center">
+          <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-t-[28px] border border-line bg-surface p-5 sm:rounded-[28px]">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-sub">最終確認</p>
+            <h2 className="mt-1 text-xl font-black text-ink">注文を確定してよろしいですか？</h2>
+
+            <div className="mt-4 space-y-3">
+              {cart.map((item) => (
+                <div key={item.lineId ?? item.menuItem.id} className="rounded-xl border border-line bg-canvas p-3 text-sm text-ink">
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-bold">{item.menuItem.name} × {item.qty}</span>
+                    <span className="font-black">¥{(optionUnitPrice(item.menuItem, item.options ?? []) * item.qty).toLocaleString()}</span>
+                  </div>
+                  {item.bundleSelections && item.bundleSelections.length > 0 && (
+                    <p className="mt-2 text-xs font-bold text-brand-indigo">
+                      {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                    </p>
+                  )}
+                  {item.options && item.options.length > 0 && (
+                    <p className="mt-2 text-xs font-bold text-brand-indigo">
+                      {item.options.map((option) => option.name).join(" / ")}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t border-line pt-4 text-lg font-black text-ink">
+              <span>合計</span>
+              <span>¥{total.toLocaleString()}</span>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCheckoutConfirmation(false)}
+                className="flex-1 rounded-2xl border border-line px-4 py-3 text-sm font-bold text-sub"
+              >
+                戻る
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCheckout()}
+                disabled={isSubmitting}
+                className="neon-button flex-1 rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-50"
+              >
+                {isSubmitting ? "発行中..." : "確定して番号発行"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {setModalItem && (
         <YakitoriSetModal
