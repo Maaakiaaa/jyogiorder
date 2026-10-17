@@ -134,27 +134,30 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
           {menuItem.bundleSlots.slice(activeSlotIndex, activeSlotIndex + 1).map((slot) => {
             const selectedItem = slot.candidateItems.find((item) => item.id === selectedItems[slot.id]);
             const choiceMap = selectedOptions[slot.id] ?? {};
+            const isFixedYakitori = slot.name === "焼き鳥" || (slot.kind === "fixed" && selectedItem?.name === "焼き鳥");
             return (
               <section key={slot.id} className="rounded-2xl border border-line bg-canvas p-3">
                 <p className="text-sm font-black text-ink">{slot.name}</p>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {slot.candidateItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={unavailable(item)}
-                      onClick={() => selectItem(slot.id, item)}
-                      className={`rounded-xl border px-3 py-2 text-left text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40 ${
-                        selectedItems[slot.id] === item.id ? "border-brand-indigo bg-brand-indigo text-white" : "border-line bg-surface text-sub"
-                      }`}
-                    >
-                      <span className="block">{item.name}</span>
-                      <span className="mt-1 block text-xs font-medium">
-                        {unavailable(item) ? "売り切れ" : item.name === "けろこラテ" ? "ホットのみ" : `単品 ¥${item.price.toLocaleString()}`}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                {!isFixedYakitori && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {slot.candidateItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={unavailable(item)}
+                        onClick={() => selectItem(slot.id, item)}
+                        className={`rounded-xl border px-3 py-2 text-left text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40 ${
+                          selectedItems[slot.id] === item.id ? "border-brand-indigo bg-brand-indigo text-white" : "border-line bg-surface text-sub"
+                        }`}
+                      >
+                        <span className="block">{item.name}</span>
+                        <span className="mt-1 block text-xs font-medium">
+                          {unavailable(item) ? "売り切れ" : item.name === "けろこラテ" ? "ホットのみ" : `単品 ¥${item.price.toLocaleString()}`}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {selectedItem && groupsToAsk(selectedItem, choiceMap).map((group) => (
                   <div key={group.id} className="mt-3 border-t border-line pt-3">
