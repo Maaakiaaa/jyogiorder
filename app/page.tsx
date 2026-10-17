@@ -116,6 +116,9 @@ export default function Home() {
   useEffect(() => {
     if (!pendingOrderId) return;
 
+    const orderId = pendingOrderId;
+    let cancelled = false;
+    let fetching = false;
     const timeout = setTimeout(() => setWaitingTimedOut(true), WAITING_TIMEOUT_MS);
 
     const handleConfirmed = (order: Order) => {
@@ -128,27 +131,45 @@ export default function Home() {
       setActiveTab("menu");
     };
 
+    async function fetchPendingOrder() {
+      if (cancelled || fetching) return;
+      fetching = true;
+      try {
+        const order = await fetchOrder(orderId);
+        if (order && !cancelled) handleConfirmed(order);
+      } finally {
+        fetching = false;
+      }
+    }
+
     const channel = supabase
-      .channel(`checkout-${pendingOrderId}`)
+      .channel(`checkout-${orderId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "orders", filter: `id=eq.${pendingOrderId}` },
+        { event: "INSERT", schema: "public", table: "orders", filter: `id=eq.${orderId}` },
         async () => {
-          const order = await fetchOrder(pendingOrderId);
-          if (order) handleConfirmed(order);
+          await fetchPendingOrder();
         }
       )
       .subscribe();
 
-    const poll = setInterval(async () => {
-      const order = await fetchOrder(pendingOrderId);
-      if (order) handleConfirmed(order);
-    }, 3000);
+    const poll = setInterval(() => void fetchPendingOrder(), 3000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void fetchPendingOrder();
+    };
+    const handleOnline = () => void fetchPendingOrder();
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("online", handleOnline);
+    void fetchPendingOrder();
 
     return () => {
+      cancelled = true;
       supabase.removeChannel(channel);
       clearInterval(poll);
       clearTimeout(timeout);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("online", handleOnline);
     };
   }, [pendingOrderId]);
 
