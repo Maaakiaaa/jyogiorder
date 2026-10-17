@@ -19,6 +19,7 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
   const [selectedItems, setSelectedItems] = useState<Record<number, number>>({});
   const [selectedOptions, setSelectedOptions] = useState<Record<number, Record<number, number>>>({});
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
+  const hasDrinkSlot = menuItem.bundleSlots.some((slot) => slot.name === "ドリンク");
 
   function selectItem(slotId: number, item: MenuItem) {
     setSelectedItems((previous) => ({ ...previous, [slotId]: item.id }));
@@ -93,6 +94,11 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
         <h2 className="mt-1 text-xl font-black text-ink">{menuItem.name}</h2>
         <p className="mt-1 text-sm text-sub">セット価格 ¥{menuItem.price.toLocaleString()}（中身の価格差は加算されません）</p>
         <p className="mt-2 text-xs font-bold text-brand-indigo">{activeSlotIndex + 1} / {menuItem.bundleSlots.length}</p>
+        {!hasDrinkSlot && (
+          <p className="mt-3 rounded-xl border border-brand-vermilion/40 bg-brand-vermilion/10 px-3 py-2 text-sm font-bold text-brand-vermilion">
+            ドリンクスロットが未設定です。管理者に設定を確認してください。
+          </p>
+        )}
 
         <div className="mt-4 space-y-4">
           {menuItem.bundleSlots.slice(activeSlotIndex, activeSlotIndex + 1).map((slot) => {
@@ -154,13 +160,13 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
           {activeSlotIndex < menuItem.bundleSlots.length - 1 ? (
             <button
               onClick={() => setActiveSlotIndex((index) => index + 1)}
-              disabled={!isSelectionComplete(selections[activeSlotIndex] ?? null)}
+              disabled={!hasDrinkSlot || !isSelectionComplete(selections[activeSlotIndex] ?? null)}
               className="neon-button flex-1 rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-40"
             >
               次へ
             </button>
           ) : (
-            <button onClick={handleConfirm} disabled={!isComplete} className="neon-button flex-1 rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-40">カートに追加</button>
+            <button onClick={handleConfirm} disabled={!hasDrinkSlot || !isComplete} className="neon-button flex-1 rounded-2xl px-4 py-3 text-sm font-black disabled:opacity-40">カートに追加</button>
           )}
         </div>
       </div>
