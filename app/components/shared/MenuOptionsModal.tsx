@@ -60,7 +60,7 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
                     >
                       <span className="block">{option.name}</span>
                       <span className="mt-1 block text-xs font-medium">
-                        {option.priceDelta > 0 ? `+¥${option.priceDelta}` : option.priceDelta < 0 ? `-¥${Math.abs(option.priceDelta)}` : "価格変更なし"}
+                        {option.priceDelta > 0 ? `+¥${option.priceDelta}` : option.priceDelta < 0 ? `-¥${Math.abs(option.priceDelta)}` : ""}
                         {disabled ? " ・売り切れ" : ""}
                       </span>
                     </button>
