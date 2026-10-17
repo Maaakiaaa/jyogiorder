@@ -173,6 +173,8 @@ export default function MenuPanel({
       {bundleModalItem && (
         <BundleSetModal
           menuItem={bundleModalItem}
+          flavors={yakitoriFlavors}
+          types={yakitoriTypes}
           onCancel={() => setBundleModalItem(null)}
           onConfirm={(selections) => {
             onAddBundleSet(bundleModalItem, selections);

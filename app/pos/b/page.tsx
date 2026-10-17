@@ -260,7 +260,7 @@ export default function PosBPage() {
                     )}
                     {item.bundleSelections && item.bundleSelections.length > 0 && (
                       <span className="block text-xs font-bold text-brand-indigo">
-                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
                       </span>
                     )}
                   </div>
@@ -358,6 +358,8 @@ export default function PosBPage() {
       {bundleModalItem && (
         <BundleSetModal
           menuItem={bundleModalItem}
+          flavors={yakitoriFlavors}
+          types={yakitoriTypes}
           onCancel={() => setBundleModalItem(null)}
           onConfirm={(selections) => {
             addBundleSetToCart(bundleModalItem, selections);

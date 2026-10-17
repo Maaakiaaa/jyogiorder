@@ -88,6 +88,7 @@ export interface BundleSelection {
   slotName: string;
   menuItem: MenuItem;
   options: MenuOption[];
+  yakitoriSelections?: YakitoriSkewerSelection[];
 }
 
 export interface OrderItemBundleSnapshot {
@@ -115,6 +116,7 @@ export interface QrBundleSelection {
   slotId: number;
   menuCode: number;
   optionCodes?: number[];
+  yakitoriSelections?: QrYakitoriSkewerSelection[];
 }
 
 export interface QrOrderPayload {

@@ -185,7 +185,10 @@ export async function placeOrder(
           name_snapshot: `${selection.slotName}: ${selection.menuItem.name}`,
           price_snapshot: 0,
           qty: item.qty,
-          yakitori_selections: null,
+          yakitori_selections: selection.yakitoriSelections?.map((skewer) => ({
+            flavorName: skewer.flavorName,
+            typeName: skewer.typeName,
+          })) ?? null,
           options_snapshot: selection.options.length > 0 ? selection.options.map((option) => ({
             id: option.id,
             groupId: option.groupId,

@@ -42,7 +42,7 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
               )}
               {c.bundleSelections && c.bundleSelections.length > 0 && (
                 <p className="mt-1 text-xs font-bold text-brand-indigo">
-                  {c.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                  {c.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
                 </p>
               )}
               {c.yakitoriSelections ? (

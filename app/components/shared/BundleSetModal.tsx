@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { BundleSelection, MenuItem, MenuOption } from "@/types";
+import { BundleSelection, MenuItem, MenuOption, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 
 interface Props {
   menuItem: MenuItem;
+  flavors: YakitoriFlavor[];
+  types: YakitoriType[];
   onConfirm: (selections: BundleSelection[]) => void;
   onCancel: () => void;
 }
@@ -15,10 +17,19 @@ function unavailable(item: MenuItem): boolean {
   );
 }
 
-export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props) {
-  const [selectedItems, setSelectedItems] = useState<Record<number, number>>({});
+export default function BundleSetModal({ menuItem, flavors, types, onConfirm, onCancel }: Props) {
+  const [selectedItems, setSelectedItems] = useState<Record<number, number>>(() => Object.fromEntries(
+    menuItem.bundleSlots
+      .filter((slot) => slot.kind === "fixed" && slot.candidateItems[0])
+      .map((slot) => [slot.id, slot.candidateItems[0].id])
+  ));
   const [selectedOptions, setSelectedOptions] = useState<Record<number, Record<number, number>>>({});
   const [activeSlotIndex, setActiveSlotIndex] = useState(0);
+  const [yakitoriDrafts, setYakitoriDrafts] = useState<Record<number, { flavorId: number | null; typeId: number | null }[]>>(() => Object.fromEntries(
+    menuItem.bundleSlots
+      .filter((slot) => slot.name === "焼き鳥" || slot.candidateItems[0]?.isYakitoriSet)
+      .map((slot) => [slot.id, Array.from({ length: slot.candidateItems[0].yakitoriSkewerCount ?? 1 }, () => ({ flavorId: null, typeId: null }))])
+  ));
   const hasDrinkSlot = menuItem.bundleSlots.some((slot) => slot.name === "ドリンク");
 
   function selectItem(slotId: number, item: MenuItem) {
@@ -40,6 +51,13 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
       }
       return { ...previous, [slotId]: next };
     });
+  }
+
+  function selectYakitori(slotId: number, index: number, field: "flavorId" | "typeId", value: number) {
+    setYakitoriDrafts((previous) => ({
+      ...previous,
+      [slotId]: (previous[slotId] ?? []).map((draft, draftIndex) => draftIndex === index ? { ...draft, [field]: value } : draft),
+    }));
   }
 
   function isCold(item: MenuItem, choices: Record<number, number>) {
@@ -65,11 +83,23 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
     const options = selectedItem.optionGroups
       .map((group) => group.options.find((option) => option.id === choices[group.id]))
       .filter((option): option is MenuOption => option !== undefined);
-    return { slotId: slot.id, slotName: slot.name, menuItem: selectedItem, options } satisfies BundleSelection;
+    const drafts = yakitoriDrafts[slot.id];
+    const yakitoriSelections: YakitoriSkewerSelection[] | undefined = drafts?.every((draft) => draft.flavorId !== null && draft.typeId !== null)
+      ? drafts.map((draft) => ({
+        flavorId: draft.flavorId as number,
+        flavorName: flavors.find((flavor) => flavor.id === draft.flavorId)?.name ?? "",
+        typeId: draft.typeId as number,
+        typeName: types.find((type) => type.id === draft.typeId)?.name ?? "",
+      }))
+      : undefined;
+    return { slotId: slot.id, slotName: slot.name, menuItem: selectedItem, options, yakitoriSelections } satisfies BundleSelection;
   });
 
   function isSelectionComplete(selection: BundleSelection | null) {
     if (!selection) return false;
+    if (selection.slotName === "焼き鳥" || selection.menuItem.isYakitoriSet) {
+      if (!selection.yakitoriSelections) return false;
+    }
     const temperature = selection.menuItem.optionGroups.find((group) => group.name === "温度");
     const isColdSelection = temperature
       ? ["アイス", "コールド"].includes(selection.options.find((option) => option.groupId === temperature.id)?.name ?? "")
@@ -119,7 +149,9 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
                       }`}
                     >
                       <span className="block">{item.name}</span>
-                      <span className="mt-1 block text-xs font-medium">{unavailable(item) ? "売り切れ" : `単品 ¥${item.price.toLocaleString()}`}</span>
+                      <span className="mt-1 block text-xs font-medium">
+                        {unavailable(item) ? "売り切れ" : item.name === "けろこラテ" ? "ホットのみ" : `単品 ¥${item.price.toLocaleString()}`}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -150,6 +182,30 @@ export default function BundleSetModal({ menuItem, onConfirm, onCancel }: Props)
                     </div>
                   </div>
                 ))}
+                {(slot.name === "焼き鳥" || selectedItem?.isYakitoriSet) && (
+                  <div className="mt-3 border-t border-line pt-3">
+                    <p className="text-xs font-bold text-sub">焼き鳥の味・種類（必須）</p>
+                    {(yakitoriDrafts[slot.id] ?? []).map((draft, index) => (
+                      <div key={index} className="mt-2 rounded-xl border border-line bg-surface p-2">
+                        <p className="text-xs font-bold text-sub">{index + 1}本目</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {flavors.map((flavor) => (
+                            <button key={flavor.id} type="button" onClick={() => selectYakitori(slot.id, index, "flavorId", flavor.id)} className={`rounded-full border px-3 py-1 text-xs font-bold ${draft.flavorId === flavor.id ? "border-brand-indigo bg-brand-indigo text-white" : "border-line bg-white text-sub"}`}>
+                              {flavor.name}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {types.map((type) => (
+                            <button key={type.id} type="button" onClick={() => selectYakitori(slot.id, index, "typeId", type.id)} className={`rounded-full border px-3 py-1 text-xs font-bold ${draft.typeId === type.id ? "border-brand-gold bg-brand-gold text-white" : "border-line bg-white text-sub"}`}>
+                              {type.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}
