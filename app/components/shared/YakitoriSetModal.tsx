@@ -65,36 +65,42 @@ export default function YakitoriSetModal({ menuItem, flavors, types, onConfirm, 
             <div key={index} className="rounded-2xl border border-line bg-canvas p-3">
               <p className="text-xs font-bold text-sub">{index + 1}本目</p>
 
-              <div className="mt-2 flex flex-wrap gap-2">
-                {flavors.map((flavor) => (
-                  <button
-                    key={flavor.id}
-                    onClick={() => setFlavor(index, flavor.id)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                      draft.flavorId === flavor.id
-                        ? "border-brand-indigo bg-brand-indigo text-white"
-                        : "border-line bg-surface text-sub"
-                    }`}
-                  >
-                    {flavor.name}
-                  </button>
-                ))}
+              <div className="mt-2 flex items-start gap-2">
+                <span className="w-12 shrink-0 pt-1 text-xs font-bold text-sub">味：</span>
+                <div className="flex flex-wrap gap-2">
+                  {flavors.map((flavor) => (
+                    <button
+                      key={flavor.id}
+                      onClick={() => setFlavor(index, flavor.id)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                        draft.flavorId === flavor.id
+                          ? "border-brand-indigo bg-brand-indigo text-white"
+                          : "border-line bg-surface text-sub"
+                      }`}
+                    >
+                      {flavor.name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="mt-2 flex flex-wrap gap-2">
-                {types.map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => setType(index, type.id)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                      draft.typeId === type.id
-                        ? "border-brand-gold bg-brand-gold text-white"
-                        : "border-line bg-surface text-sub"
-                    }`}
-                  >
-                    {type.name}
-                  </button>
-                ))}
+              <div className="mt-2 flex items-start gap-2">
+                <span className="w-12 shrink-0 pt-1 text-xs font-bold text-sub">種類：</span>
+                <div className="flex flex-wrap gap-2">
+                  {types.map((type) => (
+                    <button
+                      key={type.id}
+                      onClick={() => setType(index, type.id)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                        draft.typeId === type.id
+                          ? "border-brand-gold bg-brand-gold text-white"
+                          : "border-line bg-surface text-sub"
+                      }`}
+                    >
+                      {type.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ))}
