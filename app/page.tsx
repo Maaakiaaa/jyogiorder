@@ -241,6 +241,7 @@ export default function Home() {
   if (step === "waiting" && activeOrder) {
     return (
       <WaitingPanel
+        key={activeOrder.id}
         order={activeOrder}
         orders={orders}
         activeOrderId={activeOrder.id}

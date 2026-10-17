@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Order, OrderStatus } from "@/types";
 import { fetchActiveOrders, fetchRecentCancelledOrders, updateOrderStatus } from "@/lib/orders";
+import { createNotificationAudio, playNotificationAudio, unlockNotificationAudio } from "@/lib/notificationSound";
 import { supabase } from "@/lib/supabase";
 import OrderCard from "@/app/components/kitchen/OrderCard";
 
@@ -12,10 +13,18 @@ export default function KitchenPage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previousOrderIdsRef = useRef<Set<string>>(new Set());
+  const hasLoadedOrdersRef = useRef(false);
 
   const load = useCallback(async () => {
     try {
       const [active, cancelled] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders()]);
+      if (!hasLoadedOrdersRef.current) {
+        previousOrderIdsRef.current = new Set(active.map((order) => order.id));
+        hasLoadedOrdersRef.current = true;
+      }
       setOrders(active);
       setCancelledOrders(cancelled);
     } catch {
@@ -24,6 +33,23 @@ export default function KitchenPage() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    notificationAudioRef.current = createNotificationAudio();
+    return () => {
+      notificationAudioRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const currentOrderIds = new Set(orders.map((order) => order.id));
+    const hasNewOrder = orders.some((order) => !previousOrderIdsRef.current.has(order.id));
+    previousOrderIdsRef.current = currentOrderIds;
+    if (!hasNewOrder || !audioEnabled) return;
+
+    const audio = notificationAudioRef.current;
+    if (audio) playNotificationAudio(audio);
+  }, [audioEnabled, orders]);
 
   useEffect(() => {
     load();
@@ -81,6 +107,12 @@ export default function KitchenPage() {
     void transition(id, "received");
   }
 
+  async function enableAudio() {
+    setAudioEnabled(true);
+    const audio = notificationAudioRef.current;
+    if (audio) await unlockNotificationAudio(audio);
+  }
+
   const kitchenOrders = orders.filter((o) => o.status === "received" || o.status === "cooking");
 
   return (
@@ -88,10 +120,22 @@ export default function KitchenPage() {
       <div className="mx-auto w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <h1 className="neon-title text-2xl text-ink">調理ディスプレイ</h1>
-          <button onClick={load} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-brand-indigo">
-            更新
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => void enableAudio()}
+              className={`rounded-xl border px-3 py-2 text-xs font-bold ${
+                audioEnabled ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-brand-vermilion bg-brand-vermilion/10 text-brand-vermilion"
+              }`}
+            >
+              {audioEnabled ? "🔊 音 ON" : "🔇 音を有効にする"}
+            </button>
+            <button onClick={load} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-brand-indigo">
+              更新
+            </button>
+          </div>
         </div>
+
+        {!audioEnabled && <p className="mb-3 rounded-xl border border-brand-vermilion/40 bg-brand-vermilion/10 px-3 py-2 text-xs font-bold text-brand-vermilion">音を有効にするまで新規注文の通知音は鳴りません</p>}
 
         <p className="mb-3 text-sm text-slate-500">対応中の注文 {kitchenOrders.length} 件</p>
 

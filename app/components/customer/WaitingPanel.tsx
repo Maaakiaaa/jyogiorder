@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import type { RealtimePostgresUpdatePayload } from "@supabase/supabase-js";
 import { Order, OrderStatus } from "@/types";
 import { fetchOrder } from "@/lib/orders";
+import { createNotificationAudio, playNotificationAudio, unlockNotificationAudio } from "@/lib/notificationSound";
 import { supabase } from "@/lib/supabase";
 
 interface Props {
@@ -53,19 +54,46 @@ function orderStatusBadgeStyle(status: OrderStatus) {
 
 export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrder, onDone, onBackToMenu }: Props) {
   const [currentOrder, setCurrentOrder] = useState<Order>(order);
+  const [notificationEnabled, setNotificationEnabled] = useState(false);
+  const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previousStatusRef = useRef<OrderStatus>(order.status);
 
   useEffect(() => {
-    setCurrentOrder(order);
-  }, [order]);
+    notificationAudioRef.current = createNotificationAudio();
+    return () => {
+      notificationAudioRef.current = null;
+    };
+  }, []);
 
   const poll = useCallback(async () => {
     const latest = await fetchOrder(currentOrder.id);
     if (!latest) return;
+    const previousStatus = previousStatusRef.current;
+    previousStatusRef.current = latest.status;
     setCurrentOrder(latest);
+    if (latest.status === "ready" && previousStatus !== "ready" && notificationEnabled) {
+      navigator.vibrate?.([100, 50, 100]);
+      const audio = notificationAudioRef.current;
+      if (audio) playNotificationAudio(audio);
+    }
     if (latest.status === "handed") {
       onDone(latest.id);
     }
-  }, [currentOrder.id, onDone]);
+  }, [currentOrder.id, notificationEnabled, onDone]);
+
+  async function enableReadyNotification() {
+    setNotificationEnabled(true);
+    navigator.vibrate?.(100);
+    if ("Notification" in window && Notification.permission === "default") {
+      try {
+        await Notification.requestPermission();
+      } catch {
+        // Notification permission is best effort only.
+      }
+    }
+    const audio = notificationAudioRef.current;
+    if (audio) await unlockNotificationAudio(audio);
+  }
 
   useEffect(() => {
     const channel = supabase
@@ -89,14 +117,14 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
       .subscribe();
 
     const timer = setInterval(poll, 4000);
-    void poll();
+      const initialPoll = window.setTimeout(() => void poll(), 0);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(timer);
+        window.clearTimeout(initialPoll);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentOrder.id]);
+    }, [currentOrder.id, notificationEnabled, onDone, poll]);
 
   const progress = progressValue(currentOrder.status);
 
@@ -112,6 +140,17 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
             追加注文する
           </button>
         </div>
+        <button
+          onClick={() => void enableReadyNotification()}
+          className={`mt-3 w-full rounded-xl border px-4 py-3 text-sm font-black ${
+            notificationEnabled
+              ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+              : "border-brand-vermilion bg-brand-vermilion/10 text-brand-vermilion"
+          }`}
+        >
+          {notificationEnabled ? "🔔 できあがり通知 ON" : "🔔 できあがりをお知らせ"}
+        </button>
+        {!notificationEnabled && <p className="mt-2 text-center text-xs font-bold text-brand-vermilion">タップすると振動・通知・音を有効にします</p>}
         <h1 className="mt-2 text-2xl neon-title text-ink">お客様情報</h1>
 
         <div className="mt-4 rounded-2xl border border-line bg-canvas p-3">
