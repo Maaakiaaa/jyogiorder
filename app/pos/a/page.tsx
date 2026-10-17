@@ -100,7 +100,7 @@ export default function PosAPage() {
       const optionsSnapshot = optionSnapshots(menuItem, resolvedOptions);
       const lineKey = `${menuItem.code}:${resolvedOptions.map((option) => option.code).sort((a, b) => a - b).join(",")}:${(bundleSelections ?? []).map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",")}`;
 
-      // 焼き鳥セットは串の選択が異なりうるため、同じ商品IDでもqtyでまとめず1回の購入=1行として扱う。
+      // ドリンクと焼き鳥セットは串の選択が異なりうるため、同じ商品IDでもqtyでまとめず1回の購入=1行として扱う。
       if (item.yakitoriSelections) {
         const resolved: OrderItemYakitoriSelection[] = [];
         for (const selection of item.yakitoriSelections) {

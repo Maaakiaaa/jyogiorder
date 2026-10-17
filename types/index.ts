@@ -75,7 +75,7 @@ export interface YakitoriSkewerSelection {
 export interface CartItem {
   menuItem: MenuItem;
   qty: number;
-  // 焼き鳥セットは串ごとの選択が異なりうるため、qtyでまとめずセットの購入1回=1エントリとして
+  // ドリンクと焼き鳥セットは串ごとの選択が異なりうるため、qtyでまとめずセットの購入1回=1エントリとして
   // カートに積む。lineIdはその区別用(通常品目はmenuItem.idだけで一意)。
   lineId?: string;
   yakitoriSelections?: YakitoriSkewerSelection[];

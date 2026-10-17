@@ -144,7 +144,7 @@ export default function AdminPage() {
     return Array.from(salesMap.values()).sort((a, b) => b.qty - a.qty || b.amount - a.amount || a.name.localeCompare(b.name, "ja"));
   }, [menu, salesOrders]);
 
-  // 焼き鳥セットは価格が種類・味に関係なく固定のため、金額ではなく本数だけを集計する。
+  // ドリンクと焼き鳥セットは価格が種類・味に関係なく固定のため、金額ではなく本数だけを集計する。
   const { yakitoriTypeSales, yakitoriFlavorSales, totalSkewerCount } = useMemo(() => {
     const typeCounts = new Map<string, number>();
     const flavorCounts = new Map<string, number>();
@@ -516,7 +516,7 @@ export default function AdminPage() {
             {totalSkewerCount > 0 && (
               <section className="rounded-2xl border border-line bg-canvas p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-base font-black text-ink">焼き鳥セットの内訳</p>
+                  <p className="text-base font-black text-ink">ドリンクと焼き鳥セットの内訳</p>
                   <p className="text-xs font-bold text-brand-gold">串 {totalSkewerCount}本</p>
                 </div>
 
@@ -634,7 +634,7 @@ export default function AdminPage() {
                       checked={newMenuIsYakitoriSet}
                       onChange={(e) => setNewMenuIsYakitoriSet(e.target.checked)}
                     />
-                    焼き鳥セット(串ごとに味・種類を選べる)
+                    ドリンクと焼き鳥セット（串ごとに味・種類を選べる）
                   </label>
 
                   {newMenuIsYakitoriSet && (

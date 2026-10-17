@@ -19,13 +19,17 @@ begin
 
   select id into set_menu_item_id
   from menu_items
-  where is_set = true and name = '焼き鳥セット'
+  where is_set = true and name in ('焼き鳥セット', 'ドリンクと焼き鳥セット')
   order by id
   limit 1;
 
   if drink_category_id is null or yakitori_item_id is null or set_menu_item_id is null then
-    raise exception '焼き鳥セット、焼き鳥品目、ドリンクカテゴリのいずれかが見つかりません';
+    raise exception 'ドリンクと焼き鳥セット、焼き鳥品目、ドリンクカテゴリのいずれかが見つかりません';
   end if;
+
+  update menu_items
+  set name = 'ドリンクと焼き鳥セット', is_set = true
+  where id = set_menu_item_id;
 
   insert into bundle_slots (set_item_id, name, kind, fixed_item_id, display_order)
   values (set_menu_item_id, '焼き鳥', 'fixed', yakitori_item_id, 1)
