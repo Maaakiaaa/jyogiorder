@@ -270,6 +270,13 @@ export function resolveBundleSelections(
     if (slot.kind === "fixed" && candidate.id !== slot.fixedItemId) return null;
     const options = resolveMenuOptionsByCodes(candidate, selection.optionCodes);
     if (!options) return null;
+    const temperatureGroup = candidate.optionGroups.find((group) => group.name === "温度");
+    const temperature = temperatureGroup
+      ? options.find((option) => option.groupId === temperatureGroup.id)?.name
+      : undefined;
+    const dilutionGroup = candidate.optionGroups.find((group) => group.name === "割り方");
+    if (dilutionGroup && temperature === "コールド" && !options.some((option) => option.groupId === dilutionGroup.id)) return null;
+    if (dilutionGroup && temperature === "ホット" && options.some((option) => option.groupId === dilutionGroup.id)) return null;
     resolved.push({ slotId: slot.id, slotName: slot.name, menuItem: candidate, options });
   }
 

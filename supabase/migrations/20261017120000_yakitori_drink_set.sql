@@ -62,7 +62,7 @@ do $$
 declare
   drink_category_id bigint;
   yakitori_item_id bigint;
-  set_item_id bigint;
+  set_menu_item_id bigint;
   next_menu_code integer;
 begin
   select id into drink_category_id from categories where name = 'ドリンク' order by id limit 1;
@@ -81,24 +81,24 @@ begin
     raise exception '焼き鳥のmenu_items行が見つかりません';
   end if;
 
-  select id into set_item_id from menu_items where name = '焼き鳥セット' order by id limit 1;
-  if set_item_id is null then
+  select id into set_menu_item_id from menu_items where name = '焼き鳥セット' order by id limit 1;
+  if set_menu_item_id is null then
     select coalesce(max(code), 0) + 1 into next_menu_code from menu_items;
     insert into menu_items (category_id, name, price, code, is_set)
     values ((select id from categories where name = '通常メニュー' order by id limit 1), '焼き鳥セット', 300, next_menu_code, true)
-    returning id into set_item_id;
+    returning id into set_menu_item_id;
   else
-    update menu_items set is_set = true where id = set_item_id;
+    update menu_items set is_set = true where id = set_menu_item_id;
   end if;
 
   insert into bundle_slots (set_item_id, name, kind, fixed_item_id, display_order)
-  values (set_item_id, '焼き鳥', 'fixed', yakitori_item_id, 1)
+  values (set_menu_item_id, '焼き鳥', 'fixed', yakitori_item_id, 1)
   on conflict (set_item_id, name) do update
     set kind = excluded.kind, fixed_item_id = excluded.fixed_item_id,
         source_category_id = null, display_order = excluded.display_order;
 
   insert into bundle_slots (set_item_id, name, kind, source_category_id, display_order)
-  values (set_item_id, 'ドリンク', 'category', drink_category_id, 2)
+  values (set_menu_item_id, 'ドリンク', 'category', drink_category_id, 2)
   on conflict (set_item_id, name) do update
     set kind = excluded.kind, fixed_item_id = null,
         source_category_id = excluded.source_category_id, display_order = excluded.display_order;
