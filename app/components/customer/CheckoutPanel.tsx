@@ -28,6 +28,7 @@ export default function CheckoutPanel({ cart, total, orderId, timedOut, onBack }
           flavorId: s.flavorId,
           typeId: s.typeId,
         })),
+        optionIds: item.options?.map((option) => option.id),
       })),
     }),
     [cart, orderId]

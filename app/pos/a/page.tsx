@@ -1,13 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes } from "@/lib/menu";
+import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, optionSnapshots, optionUnitPrice, resolveMenuOptions } from "@/lib/menu";
 import { NewOrderItem, placeOrder } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import CameraQrScanner from "@/app/components/pos/CameraQrScanner";
-import { MenuItem, Order, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
+import { MenuItem, Order, OrderItemOptionSnapshot, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
+import { supabase } from "@/lib/supabase";
 
 type ScanMode = "camera" | "manual";
 
@@ -18,6 +19,7 @@ type ScannedLineItem = {
   price: number;
   qty: number;
   yakitoriSelections?: OrderItemYakitoriSelection[];
+  optionsSnapshot?: OrderItemOptionSnapshot[];
 };
 
 export default function PosAPage() {
@@ -36,13 +38,29 @@ export default function PosAPage() {
   const { pendingCount: pendingSyncCount, lastError: pendingSyncError } = usePendingSync();
 
   useEffect(() => {
-    Promise.all([fetchMenuItems(), fetchYakitoriFlavors(), fetchYakitoriTypes()])
+    let cancelled = false;
+    const loadMenu = () => Promise.all([fetchMenuItems(), fetchYakitoriFlavors(), fetchYakitoriTypes()])
       .then(([items, flavors, types]) => {
+        if (cancelled) return;
         setMenu(items);
         setYakitoriFlavors(flavors);
         setYakitoriTypes(types);
       })
-      .catch(() => setScanError("メニュー情報の取得に失敗しました"));
+      .catch(() => {
+        if (!cancelled) setScanError("メニュー情報の取得に失敗しました");
+      });
+
+    void loadMenu();
+    const channel = supabase
+      .channel("pos-a-menu-options")
+      .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "option_groups" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "options" }, () => void loadMenu())
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -56,7 +74,7 @@ export default function PosAPage() {
   const { scannedItems, hasMissingItems } = useMemo(() => {
     if (!qrPayload) return { scannedItems: [] as ScannedLineItem[], hasMissingItems: false };
 
-    const merged = new Map<number, ScannedLineItem>();
+    const merged = new Map<string, ScannedLineItem>();
     const setLines: ScannedLineItem[] = [];
     let missing = false;
 
@@ -66,6 +84,15 @@ export default function PosAPage() {
         missing = true;
         return;
       }
+
+      const options = resolveMenuOptions(menuItem, item.optionIds);
+      if (!options) {
+        missing = true;
+        return;
+      }
+      const resolvedOptions = options ?? [];
+      const optionsSnapshot = optionSnapshots(menuItem, resolvedOptions);
+      const lineKey = `${item.menuId}:${resolvedOptions.map((option) => option.id).sort((a, b) => a - b).join(",")}`;
 
       // 焼き鳥セットは串の選択が異なりうるため、同じ商品IDでもqtyでまとめず1回の購入=1行として扱う。
       if (item.yakitoriSelections) {
@@ -84,23 +111,25 @@ export default function PosAPage() {
           key: `set-${index}`,
           menuId: item.menuId,
           name: menuItem.name,
-          price: menuItem.price,
+          price: optionUnitPrice(menuItem, resolvedOptions),
           qty: item.qty,
           yakitoriSelections: resolved,
+          optionsSnapshot,
         });
         return;
       }
 
-      const current = merged.get(item.menuId) ?? {
-        key: `plain-${item.menuId}`,
+      const current = merged.get(lineKey) ?? {
+        key: `plain-${lineKey}`,
         menuId: item.menuId,
         name: menuItem.name,
-        price: menuItem.price,
+        price: optionUnitPrice(menuItem, resolvedOptions),
         qty: 0,
+        optionsSnapshot,
       };
 
       current.qty += item.qty;
-      merged.set(item.menuId, current);
+      merged.set(lineKey, current);
     });
 
     return { scannedItems: [...Array.from(merged.values()), ...setLines], hasMissingItems: missing };
@@ -148,6 +177,7 @@ export default function PosAPage() {
         price: item.price,
         qty: item.qty,
         yakitoriSelections: item.yakitoriSelections,
+        optionsSnapshot: item.optionsSnapshot,
       }));
       const order = await placeOrder(qrPayload.orderId, "A", items);
       setConfirmedOrder(order);
@@ -297,6 +327,11 @@ export default function PosAPage() {
                 <div key={item.key} className="flex items-start justify-between text-sm text-ink">
                   <span>
                     {item.name} x {item.qty}
+                    {item.optionsSnapshot && item.optionsSnapshot.length > 0 && (
+                      <span className="block text-xs font-bold text-brand-indigo">
+                        {item.optionsSnapshot.map((option) => `${option.groupName}: ${option.name}`).join(" / ")}
+                      </span>
+                    )}
                     {item.yakitoriSelections && (
                       <span className="block text-xs text-sub">
                         {item.yakitoriSelections

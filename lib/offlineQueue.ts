@@ -102,6 +102,7 @@ export function pendingOrderToOrder(pending: PendingOrder): Order {
       price: item.price,
       qty: item.qty,
       yakitoriSelections: item.yakitoriSelections,
+      optionsSnapshot: item.optionsSnapshot,
     })),
     created_at: pending.createdAt,
     updated_at: pending.createdAt,

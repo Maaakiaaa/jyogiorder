@@ -4,9 +4,9 @@ const PAYLOAD_PREFIX = "V1";
 const ORDER_MARKER = "O";
 const UUID_HEX_LENGTH = 32;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// 焼き鳥セットは串ごとに味・種類IDを持つため、Yブロックとして付随させる:
-// M<menuId>Q<qty>[Y<flavorId>-<typeId>.<flavorId>-<typeId>...]
-const ITEM_PATTERN = /M(\d+)Q(\d+)(?:Y((?:\d+-\d+)(?:\.\d+-\d+)*))?/g;
+// 選択肢は名前・価格を含めず整数IDだけをXブロックで付ける:
+// M<menuId>Q<qty>[Y<flavorId>-<typeId>...][X<optionId>.<optionId>...]
+const ITEM_PATTERN = /M(\d+)Q(\d+)(?:Y((?:\d+-\d+)(?:\.\d+-\d+)*))?(?:X((?:\d+)(?:\.\d+)*))?/g;
 
 function serializeSelections(selections: QrYakitoriSkewerSelection[]): string {
   return `Y${selections.map((s) => `${s.flavorId}-${s.typeId}`).join(".")}`;
@@ -17,6 +17,14 @@ function parseSelections(raw: string): QrYakitoriSkewerSelection[] {
     const [flavorId, typeId] = pair.split("-").map((n) => Number.parseInt(n, 10));
     return { flavorId, typeId };
   });
+}
+
+function serializeOptionIds(optionIds: number[]): string {
+  return `X${optionIds.join(".")}`;
+}
+
+function parseOptionIds(raw: string): number[] {
+  return raw.split(".").map((value) => Number.parseInt(value, 10));
 }
 
 function stripHyphens(uuid: string): string {
@@ -49,12 +57,11 @@ export function isQrPayload(value: unknown): value is QrOrderPayload {
     Array.isArray(candidate.items) &&
     candidate.items.every((item) => {
       if (!item || typeof item !== "object") return false;
-      const entry = item as { menuId?: unknown; qty?: unknown; yakitoriSelections?: unknown };
+      const entry = item as { menuId?: unknown; qty?: unknown; yakitoriSelections?: unknown; optionIds?: unknown };
       if (!Number.isInteger(entry.menuId) || !Number.isInteger(entry.qty) || Number(entry.qty) <= 0) {
         return false;
       }
-      if (entry.yakitoriSelections === undefined) return true;
-      return (
+      const validYakitoriSelections = entry.yakitoriSelections === undefined || (
         Array.isArray(entry.yakitoriSelections) &&
         entry.yakitoriSelections.length > 0 &&
         entry.yakitoriSelections.every((s) => {
@@ -62,6 +69,13 @@ export function isQrPayload(value: unknown): value is QrOrderPayload {
           const selection = s as { flavorId?: unknown; typeId?: unknown };
           return Number.isInteger(selection.flavorId) && Number.isInteger(selection.typeId);
         })
+      );
+      if (!validYakitoriSelections) return false;
+      if (entry.optionIds === undefined) return true;
+      return (
+        Array.isArray(entry.optionIds) &&
+        entry.optionIds.length > 0 &&
+        entry.optionIds.every((id) => Number.isInteger(id) && Number(id) > 0)
       );
     })
   );
@@ -72,7 +86,9 @@ export function serializeQrPayload(payload: QrOrderPayload): string {
   const items = payload.items
     .map((item) => {
       const base = `M${item.menuId}Q${item.qty}`;
-      return item.yakitoriSelections ? base + serializeSelections(item.yakitoriSelections) : base;
+      const yakitori = item.yakitoriSelections ? serializeSelections(item.yakitoriSelections) : "";
+      const options = item.optionIds ? serializeOptionIds(item.optionIds) : "";
+      return base + yakitori + options;
     })
     .join("");
   return `${PAYLOAD_PREFIX}${ORDER_MARKER}${hex32}${items}`;
@@ -99,13 +115,16 @@ export function parseQrPayload(rawValue: string): QrOrderPayload {
       menuId: Number.parseInt(match[1], 10),
       qty: Number.parseInt(match[2], 10),
       ...(selectionsRaw ? { yakitoriSelections: parseSelections(selectionsRaw) } : {}),
+      ...(match[4] ? { optionIds: parseOptionIds(match[4]) } : {}),
     };
   });
 
   const reconstructed = items
     .map((item) => {
       const base = `M${item.menuId}Q${item.qty}`;
-      return item.yakitoriSelections ? base + serializeSelections(item.yakitoriSelections) : base;
+      const yakitori = item.yakitoriSelections ? serializeSelections(item.yakitoriSelections) : "";
+      const options = item.optionIds ? serializeOptionIds(item.optionIds) : "";
+      return base + yakitori + options;
     })
     .join("");
 

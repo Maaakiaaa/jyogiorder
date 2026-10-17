@@ -189,6 +189,11 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
               <div key={i} className="flex justify-between text-sm text-ink">
                 <span>
                   {item.name} x {item.qty}
+                  {item.optionsSnapshot && item.optionsSnapshot.length > 0 && (
+                    <span className="block text-xs text-brand-indigo">
+                      {item.optionsSnapshot.map((option) => `${option.groupName}: ${option.name}`).join(" / ")}
+                    </span>
+                  )}
                   {item.yakitoriSelections && (
                     <span className="block text-xs text-sub">
                       {item.yakitoriSelections.map((s, si) => `${si + 1}.${s.typeName}×${s.flavorName}`).join("、")}

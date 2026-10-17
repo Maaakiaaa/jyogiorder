@@ -1,11 +1,11 @@
-import { MenuItem, YakitoriFlavor, YakitoriType } from "@/types";
+import { MenuItem, MenuOption, MenuOptionGroup, OrderItemOptionSnapshot, YakitoriFlavor, YakitoriType } from "@/types";
 import { supabase } from "./supabase";
 
 export const MENU_ITEMS: MenuItem[] = [
-  { id: 1, categoryId: 1, name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null },
-  { id: 2, categoryId: 1, name: "かき氷", price: 250, emoji: "🍧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null },
-  { id: 3, categoryId: 1, name: "コーラ", price: 150, emoji: "🥤", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null },
-  { id: 4, categoryId: 1, name: "水", price: 100, emoji: "💧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null },
+  { id: 1, categoryId: 1, name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
+  { id: 2, categoryId: 1, name: "かき氷", price: 250, emoji: "🍧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
+  { id: 3, categoryId: 1, name: "コーラ", price: 150, emoji: "🥤", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
+  { id: 4, categoryId: 1, name: "水", price: 100, emoji: "💧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [] },
 ];
 
 type MenuItemRow = {
@@ -18,6 +18,24 @@ type MenuItemRow = {
   is_active: boolean;
   is_yakitori_set: boolean;
   yakitori_skewer_count: number | null;
+};
+
+type OptionGroupRow = {
+  id: number;
+  menu_item_id: number;
+  name: string;
+  required: boolean;
+  display_order: number;
+};
+
+type OptionRow = {
+  id: number;
+  group_id: number;
+  name: string;
+  price_delta: number;
+  is_available: boolean;
+  is_active: boolean;
+  display_order: number;
 };
 
 type YakitoriFlavorRow = {
@@ -45,7 +63,66 @@ function fromRow(row: MenuItemRow): MenuItem {
     isActive: row.is_active,
     isYakitoriSet: row.is_yakitori_set,
     yakitoriSkewerCount: row.yakitori_skewer_count,
+    optionGroups: [],
   };
+}
+
+function optionFromRow(row: OptionRow): MenuOption {
+  return {
+    id: row.id,
+    groupId: row.group_id,
+    name: row.name,
+    priceDelta: row.price_delta,
+    isAvailable: row.is_available,
+    isActive: row.is_active,
+    displayOrder: row.display_order,
+  };
+}
+
+function attachOptionGroups(
+  items: MenuItem[],
+  groups: OptionGroupRow[],
+  options: OptionRow[]
+): MenuItem[] {
+  const optionsByGroup = new Map<number, MenuOption[]>();
+  for (const row of options) {
+    const groupOptions = optionsByGroup.get(row.group_id) ?? [];
+    groupOptions.push(optionFromRow(row));
+    optionsByGroup.set(row.group_id, groupOptions);
+  }
+
+  const groupsByMenuItem = new Map<number, MenuOptionGroup[]>();
+  for (const row of groups) {
+    const menuGroups = groupsByMenuItem.get(row.menu_item_id) ?? [];
+    menuGroups.push({
+      id: row.id,
+      menuItemId: row.menu_item_id,
+      name: row.name,
+      required: row.required,
+      displayOrder: row.display_order,
+      options: (optionsByGroup.get(row.id) ?? []).sort((a, b) => a.displayOrder - b.displayOrder),
+    });
+    groupsByMenuItem.set(row.menu_item_id, menuGroups);
+  }
+
+  return items.map((item) => ({
+    ...item,
+    optionGroups: (groupsByMenuItem.get(item.id) ?? []).sort((a, b) => a.displayOrder - b.displayOrder),
+  }));
+}
+
+async function fetchOptionRows(activeOnly: boolean): Promise<{ groups: OptionGroupRow[]; options: OptionRow[] }> {
+  const groupsQuery = supabase.from("option_groups").select("*").order("display_order", { ascending: true });
+  let optionsQuery = supabase.from("options").select("*").order("display_order", { ascending: true });
+  if (activeOnly) optionsQuery = optionsQuery.eq("is_active", true);
+
+  const [{ data: groups, error: groupsError }, { data: options, error: optionsError }] = await Promise.all([
+    groupsQuery,
+    optionsQuery,
+  ]);
+  if (groupsError) throw groupsError;
+  if (optionsError) throw optionsError;
+  return { groups: (groups ?? []) as OptionGroupRow[], options: (options ?? []) as OptionRow[] };
 }
 
 function flavorFromRow(row: YakitoriFlavorRow): YakitoriFlavor {
@@ -70,7 +147,8 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
       return MENU_ITEMS;
     }
 
-    return (data ?? []).map(fromRow);
+    const optionRows = await fetchOptionRows(true);
+    return attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options);
   } catch {
     return MENU_ITEMS;
   }
@@ -84,7 +162,36 @@ export async function fetchAllMenuItemsForAdmin(): Promise<MenuItem[]> {
     .order("sort_order", { ascending: true });
 
   if (error) throw error;
-  return (data ?? []).map(fromRow);
+  const optionRows = await fetchOptionRows(false);
+  return attachOptionGroups((data ?? []).map(fromRow), optionRows.groups, optionRows.options);
+}
+
+export function resolveMenuOptions(menuItem: MenuItem, optionIds: number[] | undefined): MenuOption[] | null {
+  const selectedIds = optionIds ?? [];
+  if (new Set(selectedIds).size !== selectedIds.length) return null;
+
+  const selected = selectedIds.map((id) => menuItem.optionGroups.flatMap((group) => group.options).find((option) => option.id === id));
+  if (selected.some((option) => !option || !option.isActive || !option.isAvailable)) return null;
+
+  const selectedOptions = selected as MenuOption[];
+  const selectedGroups = new Set(selectedOptions.map((option) => option.groupId));
+  if (selectedGroups.size !== selectedOptions.length) return null;
+  if (menuItem.optionGroups.some((group) => group.required && !selectedGroups.has(group.id))) return null;
+  return selectedOptions;
+}
+
+export function optionUnitPrice(menuItem: MenuItem, options: MenuOption[]): number {
+  return menuItem.price + options.reduce((sum, option) => sum + option.priceDelta, 0);
+}
+
+export function optionSnapshots(menuItem: MenuItem, options: MenuOption[]): OrderItemOptionSnapshot[] {
+  return options.map((option) => ({
+    id: option.id,
+    groupId: option.groupId,
+    groupName: menuItem.optionGroups.find((group) => group.id === option.groupId)?.name ?? "選択肢",
+    name: option.name,
+    priceDelta: option.priceDelta,
+  }));
 }
 
 export async function createMenuItem(

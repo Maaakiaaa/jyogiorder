@@ -6,11 +6,12 @@ interface Props {
   cart: CartItem[];
   total: number;
   onChangeQty: (id: number, delta: number) => void;
+  onChangeLineQty: (lineId: string, delta: number) => void;
   onRemoveYakitoriSet: (lineId: string) => void;
   onShowQr: () => void;
 }
 
-export default function CartPanel({ cart, total, onChangeQty, onRemoveYakitoriSet, onShowQr }: Props) {
+export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, onRemoveYakitoriSet, onShowQr }: Props) {
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-sub">
@@ -31,13 +32,21 @@ export default function CartPanel({ cart, total, onChangeQty, onRemoveYakitoriSe
           >
             <div>
               <p className="font-bold text-ink">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{c.menuItem.name}</p>
+              {c.options && c.options.length > 0 && (
+                <p className="mt-1 text-xs font-bold text-brand-indigo">
+                  {c.options.map((option) => {
+                    const group = c.menuItem.optionGroups.find((entry) => entry.id === option.groupId);
+                    return `${group?.name ?? "選択肢"}: ${option.name}`;
+                  }).join(" / ")}
+                </p>
+              )}
               {c.yakitoriSelections ? (
                 <p className="mt-1 text-sm text-sub">
-                  ¥{c.menuItem.price} ・{" "}
+                  ¥{(c.menuItem.price + (c.options ?? []).reduce((sum, option) => sum + option.priceDelta, 0)).toLocaleString()} ・{" "}
                   {c.yakitoriSelections.map((s, i) => `${i + 1}.${s.typeName}×${s.flavorName}`).join("、")}
                 </p>
               ) : (
-                <p className="mt-1 text-sm text-sub">¥{c.menuItem.price} x {c.qty}</p>
+                <p className="mt-1 text-sm text-sub">¥{(c.menuItem.price + (c.options ?? []).reduce((sum, option) => sum + option.priceDelta, 0)).toLocaleString()} x {c.qty}</p>
               )}
             </div>
             {c.yakitoriSelections ? (
@@ -47,6 +56,22 @@ export default function CartPanel({ cart, total, onChangeQty, onRemoveYakitoriSe
               >
                 削除
               </button>
+            ) : c.options && c.options.length > 0 && c.lineId ? (
+              <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
+                <button
+                  onClick={() => onChangeLineQty(c.lineId as string, -1)}
+                  className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
+                >
+                  −
+                </button>
+                <span className="w-8 text-center text-sm font-black text-ink">{c.qty}</span>
+                <button
+                  onClick={() => onChangeLineQty(c.lineId as string, 1)}
+                  className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
+                >
+                  +
+                </button>
+              </div>
             ) : (
               <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
                 <button

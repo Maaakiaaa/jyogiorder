@@ -1,6 +1,25 @@
 export type OrderStatus = "received" | "cooking" | "ready" | "handed" | "cancelled";
 export type OrderPrefix = "A" | "B";
 
+export interface MenuOption {
+  id: number;
+  groupId: number;
+  name: string;
+  priceDelta: number;
+  isAvailable: boolean;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export interface MenuOptionGroup {
+  id: number;
+  menuItemId: number;
+  name: string;
+  required: boolean;
+  displayOrder: number;
+  options: MenuOption[];
+}
+
 export interface MenuItem {
   id: number;
   categoryId: number | null;
@@ -11,6 +30,7 @@ export interface MenuItem {
   isActive: boolean;
   isYakitoriSet: boolean;
   yakitoriSkewerCount: number | null;
+  optionGroups: MenuOptionGroup[];
 }
 
 export interface YakitoriFlavor {
@@ -42,6 +62,7 @@ export interface CartItem {
   // カートに積む。lineIdはその区別用(通常品目はmenuItem.idだけで一意)。
   lineId?: string;
   yakitoriSelections?: YakitoriSkewerSelection[];
+  options?: MenuOption[];
 }
 
 export interface QrYakitoriSkewerSelection {
@@ -53,6 +74,7 @@ export interface QrCartItem {
   menuId: number;
   qty: number;
   yakitoriSelections?: QrYakitoriSkewerSelection[];
+  optionIds?: number[];
 }
 
 export interface QrOrderPayload {
@@ -66,12 +88,21 @@ export interface OrderItemYakitoriSelection {
   typeName: string;
 }
 
+export interface OrderItemOptionSnapshot {
+  id: number;
+  groupId: number;
+  groupName: string;
+  name: string;
+  priceDelta: number;
+}
+
 export interface OrderItem {
   menuItemId: number | null;
   name: string;
   price: number;
   qty: number;
   yakitoriSelections?: OrderItemYakitoriSelection[];
+  optionsSnapshot?: OrderItemOptionSnapshot[];
 }
 
 export interface Order {

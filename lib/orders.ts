@@ -8,7 +8,7 @@ import {
   recordPendingOrderFailure,
   removePendingOrder,
 } from "./offlineQueue";
-import { Order, OrderItem, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
+import { Order, OrderItem, OrderItemOptionSnapshot, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
 
 type OrderRow = {
   id: string;
@@ -28,6 +28,7 @@ type OrderItemRow = {
   price_snapshot: number;
   qty: number;
   yakitori_selections: OrderItemYakitoriSelection[] | null;
+  options_snapshot: OrderItemOptionSnapshot[] | null;
 };
 
 function fromRows(order: OrderRow, items: OrderItemRow[]): Order {
@@ -46,6 +47,7 @@ function fromRows(order: OrderRow, items: OrderItemRow[]): Order {
       price: item.price_snapshot,
       qty: item.qty,
       yakitoriSelections: item.yakitori_selections ?? undefined,
+      optionsSnapshot: item.options_snapshot ?? undefined,
     })),
   };
 }
@@ -66,6 +68,7 @@ export type NewOrderItem = {
   price: number;
   qty: number;
   yakitoriSelections?: OrderItemYakitoriSelection[];
+  optionsSnapshot?: OrderItemOptionSnapshot[];
 };
 
 // fetchOrder()はUI側のポーリング用に「取得できなければnull」という緩い契約にしているため、
@@ -159,6 +162,7 @@ export async function placeOrder(
         price_snapshot: item.price,
         qty: item.qty,
         yakitori_selections: item.yakitoriSelections ?? null,
+        options_snapshot: item.optionsSnapshot ?? null,
       }))
     );
 

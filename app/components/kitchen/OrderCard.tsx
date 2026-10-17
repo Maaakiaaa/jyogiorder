@@ -58,6 +58,11 @@ export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, o
           {order.items.map((i, idx) => (
             <p key={idx} className="text-base text-ink">
               {i.name} x {i.qty}
+              {i.optionsSnapshot && i.optionsSnapshot.length > 0 && (
+                <span className="block text-base font-black text-[#AF011C]">
+                  {i.optionsSnapshot.map((option) => `${option.groupName}: ${option.name}`).join(" / ")}
+                </span>
+              )}
               {i.yakitoriSelections && (
                 <span className="block text-sm text-[#AF011C]">
                   {i.yakitoriSelections.map((s, si) => `${si + 1}.${s.typeName}×${s.flavorName}`).join("、")}

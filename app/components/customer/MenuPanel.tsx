@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { CartItem, MenuItem, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
+import { CartItem, MenuItem, MenuOption, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 import YakitoriSetModal from "@/app/components/shared/YakitoriSetModal";
+import MenuOptionsModal from "@/app/components/shared/MenuOptionsModal";
 
 interface Props {
   menu: MenuItem[];
@@ -10,7 +11,8 @@ interface Props {
   yakitoriFlavors: YakitoriFlavor[];
   yakitoriTypes: YakitoriType[];
   onChangeQty: (id: number, delta: number) => void;
-  onAddYakitoriSet: (menuItem: MenuItem, selections: YakitoriSkewerSelection[]) => void;
+  onAddItem: (menuItem: MenuItem, options?: MenuOption[]) => void;
+  onAddYakitoriSet: (menuItem: MenuItem, selections: YakitoriSkewerSelection[], options?: MenuOption[]) => void;
 }
 
 export default function MenuPanel({
@@ -19,9 +21,12 @@ export default function MenuPanel({
   yakitoriFlavors,
   yakitoriTypes,
   onChangeQty,
+  onAddItem,
   onAddYakitoriSet,
 }: Props) {
   const [setModalItem, setSetModalItem] = useState<MenuItem | null>(null);
+  const [optionsModalItem, setOptionsModalItem] = useState<MenuItem | null>(null);
+  const [pendingOptions, setPendingOptions] = useState<MenuOption[] | undefined>();
 
   function getQty(id: number) {
     return cart.find((c) => c.menuItem.id === id)?.qty ?? 0;
@@ -31,10 +36,17 @@ export default function MenuPanel({
     return cart.filter((c) => c.menuItem.id === id && c.yakitoriSelections).length;
   }
 
+  function isOptionSoldout(item: MenuItem) {
+    return item.optionGroups.some(
+      (group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)
+    );
+  }
+
   return (
     <div className="space-y-4 px-3 py-2">
       {menu.map((item) => {
-        const isSoldout = !item.isAvailable;
+        const isSoldout = !item.isAvailable || isOptionSoldout(item);
+        const hasOptions = item.optionGroups.length > 0;
 
         return (
           <article
@@ -61,12 +73,26 @@ export default function MenuPanel({
 
             {item.isYakitoriSet ? (
               <button
-                onClick={() => setSetModalItem(item)}
+                onClick={() => {
+                  if (hasOptions) {
+                    setOptionsModalItem(item);
+                  } else {
+                    setSetModalItem(item);
+                  }
+                }}
                 disabled={isSoldout}
                 className="rounded-xl border border-brand-indigo/40 bg-brand-indigo/10 px-3 py-3 text-xs font-bold text-brand-indigo disabled:opacity-30"
               >
-                串を選んで追加
+                {hasOptions ? "選択して追加" : "串を選んで追加"}
                 {getSetCount(item.id) > 0 && <span className="ml-1">({getSetCount(item.id)})</span>}
+              </button>
+            ) : hasOptions ? (
+              <button
+                onClick={() => setOptionsModalItem(item)}
+                disabled={isSoldout}
+                className="rounded-xl border border-brand-indigo/40 bg-brand-indigo/10 px-3 py-3 text-xs font-bold text-brand-indigo disabled:opacity-30"
+              >
+                選択して追加
               </button>
             ) : (
               <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
@@ -96,10 +122,34 @@ export default function MenuPanel({
           menuItem={setModalItem}
           flavors={yakitoriFlavors}
           types={yakitoriTypes}
-          onCancel={() => setSetModalItem(null)}
-          onConfirm={(selections) => {
-            onAddYakitoriSet(setModalItem, selections);
+          onCancel={() => {
             setSetModalItem(null);
+            setPendingOptions(undefined);
+          }}
+          onConfirm={(selections) => {
+            onAddYakitoriSet(setModalItem, selections, pendingOptions);
+            setPendingOptions(undefined);
+            setSetModalItem(null);
+          }}
+        />
+      )}
+
+      {optionsModalItem && (
+        <MenuOptionsModal
+          menuItem={optionsModalItem}
+          onCancel={() => {
+            setOptionsModalItem(null);
+            setPendingOptions(undefined);
+          }}
+          onConfirm={(options) => {
+            if (optionsModalItem.isYakitoriSet) {
+              setPendingOptions(options);
+              setOptionsModalItem(null);
+              setSetModalItem(optionsModalItem);
+              return;
+            }
+            onAddItem(optionsModalItem, options);
+            setOptionsModalItem(null);
           }}
         />
       )}

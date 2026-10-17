@@ -11,7 +11,7 @@ import { fetchOrder } from "@/lib/orders";
 import { createOrderId } from "@/lib/qr";
 import { supabase } from "@/lib/supabase";
 import { loadCustomerSession, saveCustomerSession } from "@/lib/customerSession";
-import { CartItem, MenuItem, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
+import { CartItem, MenuItem, MenuOption, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 
 type CustomerStep = "menu" | "checkout" | "waiting" | "welcome";
 type TabType = "menu" | "cart";
@@ -31,7 +31,9 @@ export default function Home() {
   const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [sessionRestored, setSessionRestored] = useState(false);
 
-  const cartTotal = cart.reduce((sum, item) => sum + item.menuItem.price * item.qty, 0);
+  const cartTotal = cart.reduce((sum, item) => (
+    sum + (item.menuItem.price + (item.options ?? []).reduce((optionSum, option) => optionSum + option.priceDelta, 0)) * item.qty
+  ), 0);
 
   // リロード対策: 支払い確定済み(まだ受け渡し済みでない)の注文IDだけをlocalStorageに
   // 退避しておき、再訪時にDBの最新状態で復元する。カート・QR提示中の状態はここでは
@@ -100,6 +102,8 @@ export default function Home() {
     const channel = supabase
       .channel("menu-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "option_groups" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "options" }, () => void loadMenu())
       .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_flavors" }, () => void loadMenu())
       .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_types" }, () => void loadMenu())
       .subscribe();
@@ -173,6 +177,28 @@ export default function Home() {
     };
   }, [pendingOrderId]);
 
+  function getLineKey(options?: MenuOption[], yakitoriSelections?: YakitoriSkewerSelection[]) {
+    const optionKey = (options ?? []).map((option) => option.id).sort((a, b) => a - b).join(",");
+    const yakitoriKey = (yakitoriSelections ?? []).map((selection) => `${selection.flavorId}-${selection.typeId}`).join(".");
+    return `${optionKey}|${yakitoriKey}`;
+  }
+
+  function addItemToCart(menuItem: MenuItem, options?: MenuOption[]) {
+    setCart((prev) => {
+      const lineKey = getLineKey(options);
+      const existing = prev.find((item) => item.menuItem.id === menuItem.id && getLineKey(item.options) === lineKey && !item.yakitoriSelections);
+      if (existing) {
+        return prev.map((item) => item === existing ? { ...item, qty: item.qty + 1 } : item);
+      }
+      return [...prev, {
+        menuItem,
+        qty: 1,
+        ...(options && options.length > 0 ? { options } : {}),
+        ...(options && options.length > 0 ? { lineId: `options-${menuItem.id}-${lineKey}` } : {}),
+      }];
+    });
+  }
+
   function changeQty(id: number, delta: number) {
     setCart((prev) => {
       const existing = prev.find((item) => item.menuItem.id === id);
@@ -195,11 +221,19 @@ export default function Home() {
     });
   }
 
-  function addYakitoriSetToCart(menuItem: MenuItem, selections: YakitoriSkewerSelection[]) {
-    setCart((prev) => [
-      ...prev,
-      { menuItem, qty: 1, lineId: crypto.randomUUID(), yakitoriSelections: selections },
-    ]);
+  function changeLineQty(lineId: string, delta: number) {
+    setCart((prev) => prev
+      .map((item) => item.lineId === lineId ? { ...item, qty: item.qty + delta } : item)
+      .filter((item) => item.qty > 0));
+  }
+
+  function addYakitoriSetToCart(menuItem: MenuItem, selections: YakitoriSkewerSelection[], options?: MenuOption[]) {
+    const lineKey = getLineKey(options, selections);
+    setCart((prev) => {
+      const existing = prev.find((item) => item.menuItem.id === menuItem.id && getLineKey(item.options, item.yakitoriSelections) === lineKey);
+      if (existing) return prev.map((item) => item === existing ? { ...item, qty: item.qty + 1 } : item);
+      return [...prev, { menuItem, qty: 1, lineId: `yakitori-${menuItem.id}-${lineKey}`, yakitoriSelections: selections, ...(options && options.length > 0 ? { options } : {}) }];
+    });
   }
 
   function removeYakitoriSetFromCart(lineId: string) {
@@ -301,6 +335,7 @@ export default function Home() {
               yakitoriFlavors={yakitoriFlavors}
               yakitoriTypes={yakitoriTypes}
               onChangeQty={changeQty}
+              onAddItem={addItemToCart}
               onAddYakitoriSet={addYakitoriSetToCart}
             />
           ) : (
@@ -308,6 +343,7 @@ export default function Home() {
               cart={cart}
               total={cartTotal}
               onChangeQty={changeQty}
+              onChangeLineQty={changeLineQty}
               onRemoveYakitoriSet={removeYakitoriSetFromCart}
               onShowQr={handleShowQr}
             />
