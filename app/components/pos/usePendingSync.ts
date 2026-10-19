@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { listPendingOrders } from "@/lib/offlineQueue";
-import { flushPendingOrders } from "@/lib/orders";
+import { AUTH_REQUIRED_MESSAGE, flushPendingOrders } from "@/lib/orders";
 
 // オフラインで確保した注文を、オンライン復帰時・定期的に再送する。
 // 通信状況に関わらず番号は既にローカルで発行済みなので、これは「同期」であって
@@ -38,6 +38,7 @@ export function usePendingSync(): PendingSyncState {
       const queue = refreshState();
       if (retryTimer.current) clearTimeout(retryTimer.current);
       if (queue.length === 0) return;
+      if (queue.some((order) => order.lastError === AUTH_REQUIRED_MESSAGE)) return;
 
       const delay = Math.min(...queue.map((order) => retryDelay(order.attempts)));
       retryTimer.current = setTimeout(() => {

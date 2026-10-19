@@ -16,10 +16,12 @@ import {
   updateMenuItem,
   updateYakitoriFlavor,
   updateYakitoriType,
+  setItemAvailable,
 } from "@/lib/menu";
 import { supabase } from "@/lib/supabase";
 import DonutChart from "@/app/components/admin/DonutChart";
-import { ADMIN_PASSWORD, clearAdminAuthed, isAdminAuthed, setAdminAuthed } from "@/lib/adminAuth";
+import RoleGate from "@/app/components/auth/RoleGate";
+import { signOutWithRole } from "@/lib/auth";
 
 type AdminTab = "menu" | "sales" | "staff";
 
@@ -54,13 +56,11 @@ function getErrorMessage(error: unknown) {
   return "不明なエラー";
 }
 
-export default function AdminPage() {
+function AdminContent() {
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const previousSalesOrderIdsRef = useRef<Set<string>>(new Set());
   const hasInitializedSalesRef = useRef(false);
-  const [authed, setAuthed] = useState(false);
-  const [input, setInput] = useState("");
-  const [error, setError] = useState(false);
+  const authed = true;
   const [salesOrders, setSalesOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
@@ -82,27 +82,9 @@ export default function AdminPage() {
   const [newTypeName, setNewTypeName] = useState("");
   const [staffQrUrl, setStaffQrUrl] = useState("");
 
-  useEffect(() => {
-    if (isAdminAuthed()) {
-      setAuthed(true);
-    }
-  }, []);
-
-  function handleLogin() {
-    if (input === ADMIN_PASSWORD) {
-      setAdminAuthed();
-      setAuthed(true);
-      setError(false);
-    } else {
-      setError(true);
-      setInput("");
-    }
-  }
-
-  function handleLogout() {
-    clearAdminAuthed();
-    setAuthed(false);
-    setInput("");
+  async function handleLogout() {
+    await signOutWithRole();
+    window.location.reload();
   }
 
   const load = useCallback(async () => {
@@ -383,7 +365,7 @@ export default function AdminPage() {
 
   async function handleAvailableToggle(menuId: number, currentAvailable: boolean) {
     try {
-      await updateMenuItem(menuId, { isAvailable: !currentAvailable });
+      await setItemAvailable(menuId, !currentAvailable);
       await load();
     } catch (error) {
       alert(`更新に失敗しました: ${getErrorMessage(error)}`);
@@ -397,41 +379,6 @@ export default function AdminPage() {
     } catch (error) {
       alert(`更新に失敗しました: ${getErrorMessage(error)}`);
     }
-  }
-
-  if (!authed) {
-    return (
-      <main className="min-h-screen bg-canvas px-3 py-3">
-        <div className="mx-auto flex min-h-[95vh] w-full max-w-md items-center justify-center rounded-2xl border border-line bg-surface p-5 shadow-sm">
-          <div className="w-full rounded-3xl border border-line bg-surface p-6">
-            <p className="text-center text-4xl">🔐</p>
-            <h1 className="neon-title mt-2 text-center text-2xl text-ink">ADMIN LOGIN</h1>
-            <p className="mt-2 text-center text-xs text-sub">管理パスワードを入力してください</p>
-
-            <input
-              type="password"
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                setError(false);
-              }}
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              placeholder="Password"
-              className={`mt-5 w-full rounded-xl border bg-canvas px-4 py-3 text-sm outline-none ${
-                error ? "border-rose-400 text-rose-700" : "border-line text-ink"
-              }`}
-              autoFocus
-            />
-
-            {error && <p className="mt-2 text-center text-xs text-rose-600">パスワードが違います</p>}
-
-            <button onClick={handleLogin} className="neon-button mt-5 w-full rounded-xl py-4 text-base font-black">
-              ログイン
-            </button>
-          </div>
-        </div>
-      </main>
-    );
   }
 
   return (
@@ -560,7 +507,7 @@ export default function AdminPage() {
                   className="mx-auto mt-4 rounded-lg bg-white p-3"
                 />
               ) : (
-                <div className="mx-auto mt-4 flex h-[240px] w-[240px] items-center justify-center rounded-lg bg-surface text-sm text-sub">
+                <div className="mx-auto mt-4 flex h-60 w-60 items-center justify-center rounded-lg bg-surface text-sm text-sub">
                   QRコードを生成中...
                 </div>
               )}
@@ -854,4 +801,8 @@ export default function AdminPage() {
       </div>
     </main>
   );
+}
+
+export default function AdminPage() {
+  return <RoleGate roles={["admin"]}><AdminContent /></RoleGate>;
 }

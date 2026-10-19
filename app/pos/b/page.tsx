@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, optionSnapshots, optionUnitPrice } from "@/lib/menu";
-import { NewOrderItem, placeOrder } from "@/lib/orders";
+import { AUTH_REQUIRED_MESSAGE, NewOrderItem, placeOrder, isAuthError } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { createOrderId } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
@@ -11,6 +11,7 @@ import MenuOptionsModal from "@/app/components/shared/MenuOptionsModal";
 import BundleSetModal from "@/app/components/shared/BundleSetModal";
 import { BundleSelection, MenuItem, MenuOption, Order, YakitoriFlavor, YakitoriSkewerSelection, YakitoriType } from "@/types";
 import { supabase } from "@/lib/supabase";
+import RoleGate from "@/app/components/auth/RoleGate";
 
 type BCartItem = {
   menuItem: MenuItem;
@@ -21,7 +22,7 @@ type BCartItem = {
   bundleSelections?: BundleSelection[];
 };
 
-export default function PosBPage() {
+function PosBContent() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
   const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
@@ -170,8 +171,10 @@ export default function PosBPage() {
       setConfirmedOrder(order);
       setCart([]);
       setShowCheckoutConfirmation(false);
-    } catch {
-      setError("番号発行に失敗しました。もう一度お試しください。");
+    } catch (error) {
+      setError(isAuthError(error) || error instanceof Error && error.message === AUTH_REQUIRED_MESSAGE
+        ? AUTH_REQUIRED_MESSAGE
+        : "番号発行に失敗しました。通信を確認して再試行してください。");
     } finally {
       setIsSubmitting(false);
     }
@@ -424,4 +427,8 @@ export default function PosBPage() {
       )}
     </main>
   );
+}
+
+export default function PosBPage() {
+  return <RoleGate roles={["staff", "admin"]}><PosBContent /></RoleGate>;
 }

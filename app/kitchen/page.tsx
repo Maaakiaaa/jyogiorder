@@ -1,15 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Order, OrderStatus } from "@/types";
+import { MenuItem, Order, OrderStatus } from "@/types";
 import { fetchActiveOrders, fetchRecentCancelledOrders, updateOrderStatus } from "@/lib/orders";
+import { fetchMenuItems, setItemAvailable, setOptionAvailable } from "@/lib/menu";
 import { createNotificationAudio, playNotificationAudio, unlockNotificationAudio } from "@/lib/notificationSound";
 import { supabase } from "@/lib/supabase";
 import OrderCard from "@/app/components/kitchen/OrderCard";
+import RoleGate from "@/app/components/auth/RoleGate";
 
-export default function KitchenPage() {
+function KitchenContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -20,13 +23,14 @@ export default function KitchenPage() {
 
   const load = useCallback(async () => {
     try {
-      const [active, cancelled] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders()]);
+      const [active, cancelled, menuItems] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders(), fetchMenuItems()]);
       if (!hasLoadedOrdersRef.current) {
         previousOrderIdsRef.current = new Set(active.map((order) => order.id));
         hasLoadedOrdersRef.current = true;
       }
       setOrders(active);
       setCancelledOrders(cancelled);
+      setMenu(menuItems);
     } catch {
       // silent
     } finally {
@@ -88,6 +92,30 @@ export default function KitchenPage() {
     }
   }
 
+  async function toggleItem(item: MenuItem) {
+    setUpdating(`item-${item.id}`);
+    try {
+      await setItemAvailable(item.id, !item.isAvailable);
+      await load();
+    } catch (error) {
+      alert(`品目の切り替えに失敗しました: ${error instanceof Error ? error.message : "権限または通信エラー"}`);
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  async function toggleOption(optionId: number, available: boolean) {
+    setUpdating(`option-${optionId}`);
+    try {
+      await setOptionAvailable(optionId, !available);
+      await load();
+    } catch (error) {
+      alert(`選択肢の切り替えに失敗しました: ${error instanceof Error ? error.message : "権限または通信エラー"}`);
+    } finally {
+      setUpdating(null);
+    }
+  }
+
   function handleAdvance(id: string) {
     const order = orders.find((o) => o.id === id);
     if (!order) return;
@@ -138,6 +166,47 @@ export default function KitchenPage() {
         {!audioEnabled && <p className="mb-3 rounded-xl border border-brand-vermilion/40 bg-brand-vermilion/10 px-3 py-2 text-xs font-bold text-brand-vermilion">音を有効にするまで新規注文の通知音は鳴りません</p>}
 
         <p className="mb-3 text-sm text-slate-500">対応中の注文 {kitchenOrders.length} 件</p>
+
+        <section className="mb-5 rounded-2xl border-2 border-brand-vermilion/30 bg-brand-vermilion/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-ink">販売状態</h2>
+              <p className="mt-1 text-xs text-sub">大きなトグルで品目・選択肢の売切れを切り替えます。</p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-vermilion">厨房権限</span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {menu.map((item) => (
+              <div key={item.id} className="rounded-xl border border-line bg-white p-3">
+                <button
+                  type="button"
+                  onClick={() => void toggleItem(item)}
+                  disabled={updating !== null}
+                  className={`flex min-h-14 w-full items-center justify-between rounded-xl border-2 px-4 text-left font-black transition disabled:opacity-50 ${item.isAvailable ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "border-brand-vermilion bg-brand-vermilion/10 text-brand-vermilion"}`}
+                >
+                  <span>{item.emoji ? `${item.emoji} ` : ""}{item.name}</span>
+                  <span>{item.isAvailable ? "販売中" : "売切れ"}</span>
+                </button>
+                {item.optionGroups.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {item.optionGroups.flatMap((group) => group.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => void toggleOption(option.id, option.isAvailable)}
+                        disabled={updating !== null}
+                        className={`flex min-h-11 w-full items-center justify-between rounded-lg border px-3 text-xs font-bold disabled:opacity-50 ${option.isAvailable ? "border-emerald-300 bg-emerald-50/50 text-emerald-800" : "border-brand-vermilion bg-brand-vermilion/10 text-brand-vermilion"}`}
+                      >
+                        <span>{group.name}: {option.name}</span>
+                        <span>{option.isAvailable ? "販売中" : "売切れ"}</span>
+                      </button>
+                    )))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
 
         {loading && <div className="py-16 text-center text-slate-400">読み込み中...</div>}
 
@@ -190,4 +259,8 @@ export default function KitchenPage() {
       </div>
     </main>
   );
+}
+
+export default function KitchenPage() {
+  return <RoleGate roles={["staff", "admin"]}><KitchenContent /></RoleGate>;
 }

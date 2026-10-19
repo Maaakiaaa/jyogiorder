@@ -10,6 +10,14 @@ import {
 } from "./offlineQueue";
 import { BundleSelection, Order, OrderItem, OrderItemOptionSnapshot, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
 
+export const AUTH_REQUIRED_MESSAGE = "認証エラーです。再ログインしてください";
+
+export function isAuthError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; status?: unknown };
+  return candidate.code === "42501" || candidate.code === "PGRST301" || candidate.status === 401 || candidate.status === 403;
+}
+
 type OrderRow = {
   id: string;
   prefix: OrderPrefix;
@@ -67,6 +75,12 @@ async function fetchItemsForOrder(orderId: string): Promise<OrderItemRow[]> {
   return data ?? [];
 }
 
+async function fetchPublicItemsForOrder(orderId: string): Promise<OrderItemRow[]> {
+  const { data, error } = await supabase.rpc("get_public_order_items", { p_order_id: orderId });
+  if (error) throw error;
+  return (data ?? []) as OrderItemRow[];
+}
+
 export type NewOrderItem = {
   menuItemId: number | null;
   name: string;
@@ -107,6 +121,10 @@ export async function placeOrder(
     existing = await findExistingOrder(orderId);
   } catch (error) {
     // サーバーの状態が確認できない(オフライン等)。楽観的に「未登録」とはみなさない。
+    if (isAuthError(error)) {
+      recordPendingOrderFailure(orderId, AUTH_REQUIRED_MESSAGE);
+      throw new Error(AUTH_REQUIRED_MESSAGE);
+    }
     if (pending) {
       return pendingOrderToOrder(recordPendingOrderFailure(orderId, error) ?? pending);
     }
@@ -208,6 +226,7 @@ export async function placeOrder(
   } catch (error) {
     // 番号はキューに確保済みなので、そのまま返してオンライン復帰時の再送に委ねる。
     const failed = recordPendingOrderFailure(orderId, error);
+    if (isAuthError(error)) throw new Error(AUTH_REQUIRED_MESSAGE);
     return pendingOrderToOrder(
       failed ?? { orderId, prefix, seq, number, items, total, createdAt, attempts: 1, lastError: "送信に失敗しました" }
     );
@@ -237,9 +256,9 @@ export async function updateOrderStatus(id: string, status: OrderStatus): Promis
 }
 
 export async function fetchOrder(id: string): Promise<Order | null> {
-  const { data, error } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.rpc("get_public_order", { p_order_id: id }).maybeSingle();
   if (error || !data) return null;
-  return fromRows(data as OrderRow, await fetchItemsForOrder(id));
+  return fromRows(data as OrderRow, await fetchPublicItemsForOrder(id));
 }
 
 async function attachItems(orders: OrderRow[]): Promise<Order[]> {
@@ -262,16 +281,19 @@ async function attachItems(orders: OrderRow[]): Promise<Order[]> {
   return orders.map((order) => fromRows(order, itemsByOrder.get(order.id) ?? []));
 }
 
+async function attachPublicItems(orders: OrderRow[]): Promise<Order[]> {
+  if (orders.length === 0) return [];
+
+  const itemResults = await Promise.all(orders.map((order) => fetchPublicItemsForOrder(order.id)));
+  return orders.map((order, index) => fromRows(order, itemResults[index]));
+}
+
 // 調理ディスプレイ・呼び出しボード用: 進行中(受付/調理中/完了)の注文のみ
 export async function fetchActiveOrders(): Promise<Order[]> {
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*")
-    .in("status", ["received", "cooking", "ready"])
-    .order("created_at", { ascending: true });
+  const { data, error } = await supabase.rpc("get_public_active_orders");
 
   if (error) throw error;
-  return attachItems((data ?? []) as OrderRow[]);
+  return attachPublicItems((data ?? []) as OrderRow[]);
 }
 
 // 誤タップでの取消から復帰できるよう、直近の取消済み注文を調理ディスプレイに出す用。

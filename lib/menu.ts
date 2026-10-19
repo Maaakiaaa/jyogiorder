@@ -353,6 +353,22 @@ export async function updateMenuItem(
   if (error) throw error;
 }
 
+export async function setItemAvailable(id: number, isAvailable: boolean): Promise<void> {
+  const { error } = await supabase.rpc("set_item_available", {
+    p_item_id: id,
+    p_is_available: isAvailable,
+  });
+  if (error) throw error;
+}
+
+export async function setOptionAvailable(id: number, isAvailable: boolean): Promise<void> {
+  const { error } = await supabase.rpc("set_option_available", {
+    p_option_id: id,
+    p_is_available: isAvailable,
+  });
+  if (error) throw error;
+}
+
 // お客さん画面・POS用: 有効な味だけを表示順で返す
 export async function fetchYakitoriFlavors(): Promise<YakitoriFlavor[]> {
   const { data, error } = await supabase

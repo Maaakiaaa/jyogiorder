@@ -2,13 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, findMenuItemByCode, optionSnapshots, optionUnitPrice, resolveBundleSelections, resolveMenuOptionsByCodes } from "@/lib/menu";
-import { NewOrderItem, placeOrder } from "@/lib/orders";
+import { AUTH_REQUIRED_MESSAGE, NewOrderItem, placeOrder, isAuthError } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import CameraQrScanner from "@/app/components/pos/CameraQrScanner";
 import { BundleSelection, MenuItem, Order, OrderItemOptionSnapshot, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
 import { supabase } from "@/lib/supabase";
+import RoleGate from "@/app/components/auth/RoleGate";
 
 type ScanMode = "camera" | "manual";
 
@@ -23,7 +24,7 @@ type ScannedLineItem = {
   bundleSelections?: BundleSelection[];
 };
 
-export default function PosAPage() {
+function PosAContent() {
   const scanInputRef = useRef<HTMLInputElement | null>(null);
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -194,8 +195,10 @@ export default function PosAPage() {
       setRawQrText("");
       setScanError("");
       scanInputRef.current?.focus();
-    } catch {
-      setScanError("番号発行に失敗しました。もう一度お試しください。");
+    } catch (error) {
+      setScanError(isAuthError(error) || error instanceof Error && error.message === AUTH_REQUIRED_MESSAGE
+        ? AUTH_REQUIRED_MESSAGE
+        : "番号発行に失敗しました。通信を確認して再試行してください。");
     } finally {
       setIsSubmitting(false);
     }
@@ -381,4 +384,8 @@ export default function PosAPage() {
       </div>
     </main>
   );
+}
+
+export default function PosAPage() {
+  return <RoleGate roles={["staff", "admin"]}><PosAContent /></RoleGate>;
 }
