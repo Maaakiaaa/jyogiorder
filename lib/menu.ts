@@ -249,6 +249,13 @@ export function resolveMenuOptions(menuItem: MenuItem, optionIds: number[] | und
   const selectedGroups = new Set(selectedOptions.map((option) => option.groupId));
   if (selectedGroups.size !== selectedOptions.length) return null;
   if (menuItem.optionGroups.some((group) => group.required && !selectedGroups.has(group.id))) return null;
+  const temperatureGroup = menuItem.optionGroups.find((group) => group.name === "温度");
+  const dilutionGroup = menuItem.optionGroups.find((group) => group.name === "割り方");
+  const temperature = temperatureGroup
+    ? selectedOptions.find((option) => option.groupId === temperatureGroup.id)?.name
+    : undefined;
+  if (dilutionGroup && ["アイス", "コールド"].includes(temperature ?? "") && !selectedGroups.has(dilutionGroup.id)) return null;
+  if (dilutionGroup && temperature === "ホット" && selectedGroups.has(dilutionGroup.id)) return null;
   return selectedOptions;
 }
 

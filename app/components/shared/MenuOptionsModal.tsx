@@ -36,15 +36,11 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
     const temperatureGroup = availableGroups.find((group) => group.name === "温度");
     if (!temperatureGroup) return availableGroups;
     if (temperatureGroup.required && selectedByGroup[temperatureGroup.id] === undefined) return [temperatureGroup];
-    if (selectedByGroup[temperatureGroup.id] === undefined) {
-      return availableGroups.filter((group) => group.name !== "温度");
-    }
     return availableGroups.filter((group) => group.name !== "温度" && (group.name !== "割り方" || isColdSelected()));
   }
 
   const isComplete = availableGroups.every((group) => {
-    if (group.name === "割り方" && availableGroups.some((candidate) => candidate.name === "温度") &&
-      availableGroups.find((candidate) => candidate.name === "温度")?.required && !isColdSelected()) return true;
+    if (group.name === "割り方") return !isColdSelected() || selectedByGroup[group.id] !== undefined;
     return !group.required || selectedByGroup[group.id] !== undefined;
   });
 
@@ -90,7 +86,11 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
                           : "border-line bg-surface text-sub"
                       }`}
                     >
-                      <span className="block">{option.name === "コールド" ? "アイス" : option.name}</span>
+                      <span className="block">
+                        {menuItem.name === "ゆず茶" && option.name === "アイス"
+                          ? "アイス（ゆずソーダ）"
+                          : option.name === "コールド" ? "アイス" : option.name}
+                      </span>
                       <span className="mt-1 block text-xs font-medium">
                         {option.priceDelta > 0 ? `+¥${option.priceDelta}` : option.priceDelta < 0 ? `-¥${Math.abs(option.priceDelta)}` : ""}
                         {disabled ? " ・売り切れ" : ""}

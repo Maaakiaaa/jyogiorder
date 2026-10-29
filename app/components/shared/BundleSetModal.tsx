@@ -71,7 +71,6 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
     const temperature = item.optionGroups.find((group) => group.name === "温度");
     if (!temperature) return item.optionGroups;
     if (temperature.required && choices[temperature.id] === undefined) return [temperature];
-    if (choices[temperature.id] === undefined) return item.optionGroups.filter((group) => group.name !== "温度");
     return isCold(item, choices)
       ? item.optionGroups.filter((group) => group.name === "割り方")
       : item.optionGroups.filter((group) => group.name !== "温度" && group.name !== "割り方");
@@ -106,7 +105,7 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
       ? ["アイス", "コールド"].includes(selection.options.find((option) => option.groupId === temperature.id)?.name ?? "")
       : true;
     return selection.menuItem.optionGroups.every((group) => {
-      if (group.name === "割り方" && temperature?.required && !isColdSelection) return true;
+      if (group.name === "割り方") return !isColdSelection || selection.options.some((option) => option.groupId === group.id);
       return !group.required || selection.options.some((option) => option.groupId === group.id);
     });
   }
@@ -179,7 +178,9 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
                               choiceMap[group.id] === option.id ? "border-brand-gold bg-brand-gold text-white" : "border-line bg-surface text-sub"
                             }`}
                           >
-                            {option.name === "コールド" ? "アイス" : option.name}{disabled ? "（売切）" : ""}
+                            {selectedItem.name === "ゆず茶" && option.name === "アイス"
+                              ? "アイス（ゆずソーダ）"
+                              : option.name === "コールド" ? "アイス" : option.name}{disabled ? "（売切）" : ""}
                           </button>
                         );
                       })}
