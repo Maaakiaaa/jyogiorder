@@ -25,6 +25,9 @@
   --brand-indigo: #23406e;
   --brand-indigo-dark: #16294a;
   --brand-gold: #c88a1a;
+  --stepper-button-size: 44px;
+  --stepper-row-min-height: 68px;
+  --stepper-value-size: 1.25rem;
 }
 
 html,
@@ -51,6 +54,86 @@ body {
   box-shadow:
     0 1px 2px rgba(27, 32, 39, 0.04),
     0 10px 28px rgba(27, 32, 39, 0.07);
+}
+
+.menu-item-row {
+  min-height: var(--stepper-row-min-height);
+  gap: 0.75rem;
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.menu-item-row--selected {
+  border: 2px solid var(--brand-indigo);
+  background: #eef3fc;
+}
+
+.quantity-add-button,
+.quantity-stepper__button {
+  min-width: var(--stepper-button-size);
+  min-height: var(--stepper-button-size);
+  touch-action: manipulation;
+}
+
+.quantity-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  border-radius: 0.75rem;
+  background: var(--brand-indigo);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 900;
+  padding: 0 0.8rem;
+}
+
+.quantity-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.quantity-stepper__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.quantity-stepper__button--decrease {
+  border: 2px solid var(--brand-indigo);
+  background: #ffffff;
+  color: var(--brand-indigo);
+}
+
+.quantity-stepper__button--increase {
+  border: 2px solid var(--brand-indigo);
+  background: var(--brand-indigo);
+  color: #ffffff;
+}
+
+.quantity-stepper__value {
+  min-width: 1.75rem;
+  color: var(--ink);
+  font-size: var(--stepper-value-size);
+  font-weight: 900;
+  text-align: center;
+}
+
+.quantity-add-button:disabled,
+.quantity-stepper__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+[data-density="standard"] {
+  --stepper-button-size: 48px;
+  --stepper-value-size: 1.375rem;
 }
 
 .neon-title {

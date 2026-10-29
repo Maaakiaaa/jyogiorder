@@ -2,6 +2,7 @@
 
 import { CartItem } from "@/types";
 import { displayMenuItemName } from "@/lib/menu";
+import QuantityStepper from "@/app/components/shared/QuantityStepper";
 
 interface Props {
   cart: CartItem[];
@@ -29,7 +30,9 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
         {cart.map((c) => (
           <article
             key={c.lineId ?? c.menuItem.id}
-            className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3"
+            className={`glass-panel flex items-center justify-between rounded-2xl px-3 py-3 ${
+              c.qty > 0 ? "menu-item-row--selected" : ""
+            }`}
           >
             <div>
               <p className="font-bold text-ink">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{displayMenuItemName(c.menuItem, c.options)}</p>
@@ -63,37 +66,15 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
                 削除
               </button>
             ) : ((c.options && c.options.length > 0) || (c.bundleSelections && c.bundleSelections.length > 0)) && c.lineId ? (
-              <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
-                <button
-                  onClick={() => onChangeLineQty(c.lineId as string, -1)}
-                  className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
-                >
-                  −
-                </button>
-                <span className="w-8 text-center text-sm font-black text-ink">{c.qty}</span>
-                <button
-                  onClick={() => onChangeLineQty(c.lineId as string, 1)}
-                  className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
-                >
-                  +
-                </button>
-              </div>
+              <QuantityStepper
+                quantity={c.qty}
+                onChange={(delta) => onChangeLineQty(c.lineId as string, delta)}
+              />
             ) : (
-              <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
-                <button
-                  onClick={() => onChangeQty(c.menuItem.id, -1)}
-                  className="h-11 w-11 rounded-full border border-line text-xl font-bold text-brand-indigo"
-                >
-                  −
-                </button>
-                <span className="w-8 text-center text-sm font-black text-ink">{c.qty}</span>
-                <button
-                  onClick={() => onChangeQty(c.menuItem.id, 1)}
-                  className="h-[3.25rem] w-[3.25rem] rounded-full border border-line text-2xl font-bold text-brand-indigo"
-                >
-                  +
-                </button>
-              </div>
+              <QuantityStepper
+                quantity={c.qty}
+                onChange={(delta) => onChangeQty(c.menuItem.id, delta)}
+              />
             )}
           </article>
         ))}
@@ -107,7 +88,7 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
 
         <button
           onClick={onShowQr}
-          className="neon-button inline-flex w-full items-center justify-center rounded-full px-4 py-[1.05rem] text-sm font-black transition-all"
+          className="neon-button inline-flex h-12 w-full items-center justify-center rounded-full px-4 text-sm font-black transition-all"
         >
           レジ用QRを表示
         </button>

@@ -5,6 +5,7 @@ import { BundleSelection, CartItem, MenuItem, MenuOption, YakitoriFlavor, Yakito
 import YakitoriSetModal from "@/app/components/shared/YakitoriSetModal";
 import MenuOptionsModal from "@/app/components/shared/MenuOptionsModal";
 import BundleSetModal from "@/app/components/shared/BundleSetModal";
+import QuantityStepper from "@/app/components/shared/QuantityStepper";
 
 interface Props {
   menu: MenuItem[];
@@ -88,7 +89,9 @@ export default function MenuPanel({
         return (
           <article
             key={item.id}
-            className={`glass-panel relative flex items-center justify-between rounded-2xl px-4 py-4 ${
+            className={`menu-item-row glass-panel relative flex items-center justify-between rounded-2xl px-3 ${
+              (getQty(item.id) > 0 || getSetCount(item.id) > 0) ? "menu-item-row--selected" : ""
+            } ${
               isSoldout ? "opacity-60" : ""
             }`}
           >
@@ -140,23 +143,11 @@ export default function MenuPanel({
                 選択して追加
               </button>
             ) : (
-              <div className="flex items-center gap-2 rounded-full bg-canvas px-2 py-1">
-                <button
-                  onClick={() => onChangeQty(item.id, -1)}
-                  disabled={getQty(item.id) === 0 || isSoldout}
-                  className="h-[3.25rem] w-[3.25rem] rounded-full border border-line text-xl font-bold text-brand-indigo disabled:opacity-30"
-                >
-                  −
-                </button>
-                <span className="w-8 text-center text-sm font-black text-ink">{getQty(item.id)}</span>
-                <button
-                  onClick={() => onChangeQty(item.id, 1)}
-                  disabled={isSoldout}
-                  className="h-[3.25rem] w-[3.25rem] rounded-full border border-line text-2xl font-bold text-brand-indigo disabled:opacity-30"
-                >
-                  +
-                </button>
-              </div>
+              <QuantityStepper
+                quantity={getQty(item.id)}
+                onChange={(delta) => onChangeQty(item.id, delta)}
+                disabled={isSoldout}
+              />
             )}
           </article>
         );
