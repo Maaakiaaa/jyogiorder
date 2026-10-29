@@ -93,6 +93,7 @@ function AdminContent() {
   const [editingIsYakitoriSet, setEditingIsYakitoriSet] = useState(false);
   const [editingSkewerCount, setEditingSkewerCount] = useState("");
   const [editingCategoryId, setEditingCategoryId] = useState("");
+  const [editingIsBundleSelectable, setEditingIsBundleSelectable] = useState(true);
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuName, setNewMenuName] = useState("");
@@ -286,6 +287,7 @@ function AdminContent() {
         name: newName,
         price: newPrice,
         categoryId: editingCategoryId ? Number(editingCategoryId) : null,
+        isBundleSelectable: editingIsBundleSelectable,
         isYakitoriSet: editingIsYakitoriSet,
         yakitoriSkewerCount: editingIsYakitoriSet ? skewerCount : null,
       });
@@ -347,6 +349,7 @@ function AdminContent() {
     setEditingIsYakitoriSet(item.isYakitoriSet);
     setEditingSkewerCount(item.yakitoriSkewerCount?.toString() ?? "");
     setEditingCategoryId(item.categoryId === null ? "" : String(item.categoryId));
+    setEditingIsBundleSelectable(item.isBundleSelectable);
   }
 
   function clearMenuEditing() {
@@ -356,6 +359,7 @@ function AdminContent() {
     setEditingIsYakitoriSet(false);
     setEditingSkewerCount("");
     setEditingCategoryId("");
+    setEditingIsBundleSelectable(true);
   }
 
   async function handleCreateYakitoriFlavor() {
@@ -867,6 +871,7 @@ function AdminContent() {
                     {editingMenuId !== item.id && (
                       <p className={`mt-1 text-xs font-bold ${item.categoryName ? "text-sub" : "text-brand-vermilion"}`}>
                         {item.categoryName ? `カテゴリ: ${item.categoryName}` : "カテゴリ未設定（焼き鳥タブに表示されます）"}
+                        {!item.isBundleSelectable && <span className="ml-2 text-brand-gold">セットでは選べません</span>}
                       </p>
                     )}
                   </div>
@@ -912,6 +917,15 @@ function AdminContent() {
                           <option key={category.id} value={category.id}>{category.name}</option>
                         ))}
                       </select>
+
+                      <label className="flex items-center gap-1 text-xs text-sub">
+                        <input
+                          type="checkbox"
+                          checked={editingIsBundleSelectable}
+                          onChange={(e) => setEditingIsBundleSelectable(e.target.checked)}
+                        />
+                        セットで選べる
+                      </label>
 
                       <label className="flex items-center gap-1 text-xs text-sub">
                         <input

@@ -44,6 +44,7 @@ type MenuItemRow = {
   is_yakitori_set: boolean;
   yakitori_skewer_count: number | null;
   is_set?: boolean;
+  bundle_selectable?: boolean;
 };
 
 type OptionGroupRow = {
@@ -105,6 +106,8 @@ function fromRow(row: MenuItemRow, categoryNames?: Map<number, string>): MenuIte
     yakitoriSkewerCount: row.yakitori_skewer_count,
     optionGroups: [],
     isSet: row.is_set ?? false,
+    // migration適用前のDBでは列が無いので、従来どおり「選べる」扱いにする。
+    isBundleSelectable: row.bundle_selectable ?? true,
     bundleSlots: [],
   };
 }
@@ -207,7 +210,7 @@ function attachBundleSlots(items: MenuItem[], rows: BundleSlotRow[]): MenuItem[]
         candidateItems: Array.from(byId.values()).filter((candidate) =>
           row.kind === "fixed"
             ? candidate.id === row.fixed_item_id
-            : candidate.categoryId === row.source_category_id && candidate.isActive
+            : candidate.categoryId === row.source_category_id && candidate.isActive && candidate.isBundleSelectable
         ),
       })),
   }));
@@ -429,12 +432,13 @@ export async function createMenuItem(
 export async function updateMenuItem(
   id: number,
   updates: Partial<
-    Pick<MenuItem, "name" | "price" | "categoryId" | "isAvailable" | "isActive" | "isYakitoriSet" | "yakitoriSkewerCount">
+    Pick<MenuItem, "name" | "price" | "categoryId" | "isBundleSelectable" | "isAvailable" | "isActive" | "isYakitoriSet" | "yakitoriSkewerCount">
   >
 ): Promise<void> {
   const payload: Record<string, unknown> = {};
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.categoryId !== undefined) payload.category_id = updates.categoryId;
+  if (updates.isBundleSelectable !== undefined) payload.bundle_selectable = updates.isBundleSelectable;
   if (updates.price !== undefined) payload.price = updates.price;
   if (updates.isAvailable !== undefined) payload.is_available = updates.isAvailable;
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;

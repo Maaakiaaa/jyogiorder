@@ -48,6 +48,8 @@ export interface MenuItem {
   yakitoriSkewerCount: number | null;
   optionGroups: MenuOptionGroup[];
   isSet: boolean;
+  // false の品目は、セットの「カテゴリから選ぶ」枠の候補に出さない(例: スープはドリンクだがセット対象外)。
+  isBundleSelectable: boolean;
   bundleSlots: BundleSlot[];
 }
 
