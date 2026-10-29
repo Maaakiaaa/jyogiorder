@@ -467,7 +467,7 @@ export default function Home() {
               activeTab === "menu" ? "neon-pill bg-brand-indigo/10 text-brand-indigo" : "text-sub"
             }`}
           >
-            🍜 MENU
+            🍗 メニュー
           </button>
           <button
             onClick={() => setActiveTab("cart")}
