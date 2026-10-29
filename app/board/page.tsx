@@ -153,9 +153,10 @@ export default function BoardPage() {
               {readyOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="flex aspect-[6/5] flex-col items-center justify-center gap-1 rounded-[18px] border-2 border-emerald-400 bg-white px-1 text-center"
+                  className="@container flex aspect-[6/5] flex-col items-center justify-center gap-1 rounded-[18px] border-2 border-emerald-400 bg-white px-1 text-center"
                 >
-                  <p className="text-[42px] font-black leading-none text-ink neon-title">{order.number}</p>
+                  {/* 「A-」と「01」で折り返さないよう1行に固定し、文字サイズはカード幅に合わせる(A-123 でも収まる大きさ)。 */}
+                  <p className="whitespace-nowrap text-[30cqw] font-black leading-none tabular-nums text-ink neon-title">{order.number}</p>
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">お受け取りください</p>
                 </div>
               ))}
@@ -170,9 +171,9 @@ export default function BoardPage() {
               {waitingOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="flex aspect-[8/3] flex-col items-center justify-center rounded-[18px] border-2 border-brand-gold/70 bg-canvas px-1 text-center"
+                  className="@container flex aspect-[8/3] flex-col items-center justify-center rounded-[18px] border-2 border-brand-gold/70 bg-canvas px-1 text-center"
                 >
-                  <p className="text-[36px] font-black leading-none text-ink neon-title">{order.number}</p>
+                  <p className="whitespace-nowrap text-[26cqw] font-black leading-none tabular-nums text-ink neon-title">{order.number}</p>
                 </div>
               ))}
             </div>
