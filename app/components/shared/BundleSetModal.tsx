@@ -71,6 +71,7 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
     const temperature = item.optionGroups.find((group) => group.name === "温度");
     if (!temperature) return item.optionGroups;
     if (temperature.required && choices[temperature.id] === undefined) return [temperature];
+    if (item.name === "ゆず茶") return item.optionGroups.filter((group) => group.name !== "温度" && group.name !== "割り方");
     return isCold(item, choices)
       ? item.optionGroups.filter((group) => group.name === "割り方")
       : item.optionGroups.filter((group) => group.name !== "温度" && group.name !== "割り方");
@@ -83,6 +84,11 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
     const options = selectedItem.optionGroups
       .map((group) => group.options.find((option) => option.id === choices[group.id]))
       .filter((option): option is MenuOption => option !== undefined);
+    if (selectedItem.name === "ゆず茶" && isCold(selectedItem, choices)) {
+      const dilutionGroup = selectedItem.optionGroups.find((group) => group.name === "割り方");
+      const sodaOption = dilutionGroup?.options.find((option) => option.name === "ソーダ割り" && option.isAvailable && option.isActive);
+      if (sodaOption) options.push(sodaOption);
+    }
     const drafts = yakitoriDrafts[slot.id];
     const yakitoriSelections: YakitoriSkewerSelection[] | undefined = drafts?.every((draft) => draft.flavorId !== null && draft.typeId !== null)
       ? drafts.map((draft) => ({
@@ -105,7 +111,7 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
       ? ["アイス", "コールド"].includes(selection.options.find((option) => option.groupId === temperature.id)?.name ?? "")
       : true;
     return selection.menuItem.optionGroups.every((group) => {
-      if (group.name === "割り方") return !isColdSelection || selection.options.some((option) => option.groupId === group.id);
+      if (group.name === "割り方") return selection.menuItem.name === "ゆず茶" || !isColdSelection || selection.options.some((option) => option.groupId === group.id);
       return !group.required || selection.options.some((option) => option.groupId === group.id);
     });
   }
@@ -162,7 +168,7 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
                 {selectedItem && groupsToAsk(selectedItem, choiceMap).map((group) => (
                   <div key={group.id} className="mt-3 border-t border-line pt-3">
                     <p className="text-xs font-bold text-sub">
-                      {group.name === "温度" ? "最初にホットかアイスかを選択" : group.name === "割り方" ? "次に水割りかソーダ割りを選択" : group.name}
+                      {group.name === "温度" ? "ホットかアイスかを選択" : group.name}
                       {group.required ? "（必須）" : "（任意）"}
                     </p>
                     <div className="mt-2 grid grid-cols-2 gap-2">

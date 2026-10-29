@@ -36,11 +36,11 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
     const temperatureGroup = availableGroups.find((group) => group.name === "温度");
     if (!temperatureGroup) return availableGroups;
     if (temperatureGroup.required && selectedByGroup[temperatureGroup.id] === undefined) return [temperatureGroup];
-    return availableGroups.filter((group) => group.name !== "温度" && (group.name !== "割り方" || isColdSelected()));
+    return availableGroups.filter((group) => group.name !== "温度" && group.name !== "割り方");
   }
 
   const isComplete = availableGroups.every((group) => {
-    if (group.name === "割り方") return !isColdSelected() || selectedByGroup[group.id] !== undefined;
+    if (group.name === "割り方") return menuItem.name === "ゆず茶" || !isColdSelected() || selectedByGroup[group.id] !== undefined;
     return !group.required || selectedByGroup[group.id] !== undefined;
   });
 
@@ -49,6 +49,11 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
     const selected = availableGroups
       .map((group) => group.options.find((option) => option.id === selectedByGroup[group.id]))
       .filter((option): option is MenuOption => option !== undefined);
+    if (menuItem.name === "ゆず茶" && isColdSelected()) {
+      const dilutionGroup = availableGroups.find((group) => group.name === "割り方");
+      const sodaOption = dilutionGroup?.options.find((option) => option.name === "ソーダ割り" && option.isAvailable && option.isActive);
+      if (sodaOption) selected.push(sodaOption);
+    }
     onConfirm(selected);
   }
 
@@ -65,7 +70,7 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
             <section key={group.id} className="rounded-2xl border border-line bg-canvas p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-black text-ink">
-                  {group.name === "温度" ? "最初にホットかアイスかを選択" : group.name === "割り方" ? "次にソーダ割りを選択" : group.name}
+                  {group.name === "温度" ? "ホットかアイスかを選択" : group.name}
                 </p>
                 <span className={`text-xs font-bold ${group.required ? "text-brand-vermilion" : "text-sub"}`}>
                   {group.required ? "必須" : "任意"}

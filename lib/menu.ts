@@ -254,8 +254,13 @@ export function resolveMenuOptions(menuItem: MenuItem, optionIds: number[] | und
   const temperature = temperatureGroup
     ? selectedOptions.find((option) => option.groupId === temperatureGroup.id)?.name
     : undefined;
-  if (dilutionGroup && ["アイス", "コールド"].includes(temperature ?? "") && !selectedGroups.has(dilutionGroup.id)) return null;
+  const isYuzuchaCold = menuItem.name === "ゆず茶" && ["アイス", "コールド"].includes(temperature ?? "");
+  if (dilutionGroup && ["アイス", "コールド"].includes(temperature ?? "") && !isYuzuchaCold && !selectedGroups.has(dilutionGroup.id)) return null;
   if (dilutionGroup && temperature === "ホット" && selectedGroups.has(dilutionGroup.id)) return null;
+  if (menuItem.name === "ゆず茶" && dilutionGroup && ["アイス", "コールド"].includes(temperature ?? "") && !selectedGroups.has(dilutionGroup.id)) {
+    const sodaOption = dilutionGroup.options.find((option) => option.name === "ソーダ割り" && option.isActive && option.isAvailable);
+    if (sodaOption) return [...selectedOptions, sodaOption];
+  }
   return selectedOptions;
 }
 
