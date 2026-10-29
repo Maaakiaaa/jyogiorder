@@ -23,6 +23,7 @@ function KitchenContent() {
   const [isHandedOpen, setIsHandedOpen] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const previousOrderIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedOrdersRef = useRef(false);
@@ -165,6 +166,16 @@ function KitchenContent() {
     void transition(id, "received");
   }
 
+  // 手動更新は押したことが目に見えるよう、取得中はボタンを「更新中…」にする(結果は最終更新時刻で分かる)。
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await load();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function enableAudio() {
     setAudioEnabled(true);
     const audio = notificationAudioRef.current;
@@ -188,8 +199,12 @@ function KitchenContent() {
             >
               {audioEnabled ? "🔊 音 ON" : "🔇 音を有効にする"}
             </button>
-            <button onClick={load} className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-brand-indigo">
-              更新
+            <button
+              onClick={() => void handleRefresh()}
+              disabled={refreshing}
+              className="rounded-xl border border-line px-3 py-2 text-sm font-bold text-brand-indigo disabled:opacity-50"
+            >
+              {refreshing ? "更新中…" : "更新"}
             </button>
           </div>
         </div>
@@ -207,7 +222,10 @@ function KitchenContent() {
           </div>
         )}
 
-        <p className="mb-3 text-sm text-slate-500">対応中の注文 {kitchenOrders.length} 件</p>
+        <p className="mb-3 flex items-center justify-between text-sm text-slate-500">
+          <span>対応中の注文 {kitchenOrders.length} 件</span>
+          <span className="text-xs">最終更新 {lastUpdatedAt ? new Date(lastUpdatedAt).toLocaleTimeString("ja-JP") : "—"}</span>
+        </p>
 
         <section className="mb-5 rounded-2xl border-2 border-brand-vermilion/30 bg-brand-vermilion/5 p-4">
           <button
