@@ -24,6 +24,26 @@ export default function YakitoriSetModal({ menuItem, flavors, types, onConfirm, 
 
   const isComplete = drafts.every((d) => d.flavorId !== null && d.typeId !== null);
 
+  function getMissingMessage() {
+    const missingFlavorIndexes = drafts
+      .map((draft, index) => (draft.flavorId === null ? index + 1 : null))
+      .filter((value): value is number => value !== null);
+    const missingTypeIndexes = drafts
+      .map((draft, index) => (draft.typeId === null ? index + 1 : null))
+      .filter((value): value is number => value !== null);
+
+    if (missingFlavorIndexes.length > 0 && missingTypeIndexes.length > 0) {
+      return "全て選択してください。";
+    }
+    if (missingFlavorIndexes.length > 0) {
+      return "味を選択してください。";
+    }
+    if (missingTypeIndexes.length > 0) {
+      return "種類を選択してください。";
+    }
+    return "";
+  }
+
   function setFlavor(index: number, flavorId: number) {
     setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, flavorId } : d)));
   }
@@ -33,7 +53,11 @@ export default function YakitoriSetModal({ menuItem, flavors, types, onConfirm, 
   }
 
   function handleConfirm() {
-    if (!isComplete) return;
+    if (!isComplete) {
+      const message = getMissingMessage();
+      alert(message);
+      return;
+    }
 
     const selections: YakitoriSkewerSelection[] = drafts.map((d) => {
       const flavor = flavors.find((f) => f.id === d.flavorId);
@@ -59,6 +83,12 @@ export default function YakitoriSetModal({ menuItem, flavors, types, onConfirm, 
         <p className="mt-1 text-sm text-sub">
           {skewerCount}本分、それぞれの味と種類を選んでください。
         </p>
+
+        {!isComplete && (
+          <div className="mt-3 rounded-xl border border-brand-vermilion/40 bg-brand-vermilion/10 px-3 py-2 text-xs font-bold text-brand-vermilion">
+            {getMissingMessage()}
+          </div>
+        )}
 
         <div className="mt-4 space-y-4">
           {drafts.map((draft, index) => (
@@ -116,8 +146,7 @@ export default function YakitoriSetModal({ menuItem, flavors, types, onConfirm, 
           </button>
           <button
             onClick={handleConfirm}
-            disabled={!isComplete}
-            className="neon-button flex-1 rounded-2xl px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40"
+            className="neon-button flex-1 rounded-2xl px-4 py-3 text-sm font-black"
           >
             カートに追加
           </button>

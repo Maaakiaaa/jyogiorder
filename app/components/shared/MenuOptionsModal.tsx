@@ -65,7 +65,7 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
             <section key={group.id} className="rounded-2xl border border-line bg-canvas p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-black text-ink">
-                  {group.name === "温度" ? "最初にホットかアイスかを選択" : group.name === "割り方" ? "次に水割りかソーダ割りを選択" : group.name}
+                  {group.name === "温度" ? "最初にホットかアイスかを選択" : group.name === "割り方" ? "次にソーダ割りを選択" : group.name}
                 </p>
                 <span className={`text-xs font-bold ${group.required ? "text-brand-vermilion" : "text-sub"}`}>
                   {group.required ? "必須" : "任意"}
