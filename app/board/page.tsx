@@ -148,7 +148,7 @@ export default function BoardPage() {
 
         {readyOrders.length > 0 && (
           <section className="relative z-10 rounded-[34px] border-[3px] border-emerald-500 bg-emerald-50 px-4 py-4">
-            <p className="text-center text-[25px] font-bold uppercase tracking-[0.3em] text-emerald-700">READY</p>
+            <p className="text-center text-[25px] font-bold tracking-[0.15em] text-emerald-700">受け取り可能</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {readyOrders.map((order) => (
                 <div
