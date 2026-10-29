@@ -13,6 +13,8 @@ import {
   fetchAllMenuItemsForAdmin,
   fetchAllYakitoriFlavorsForAdmin,
   fetchAllYakitoriTypesForAdmin,
+  fetchCategories,
+  MenuCategory,
   updateMenuItem,
   updateYakitoriFlavor,
   updateYakitoriType,
@@ -90,6 +92,9 @@ function AdminContent() {
   const [editingPrice, setEditingPrice] = useState<string>("");
   const [editingIsYakitoriSet, setEditingIsYakitoriSet] = useState(false);
   const [editingSkewerCount, setEditingSkewerCount] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState("");
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+  const [newMenuCategoryId, setNewMenuCategoryId] = useState("");
   const [newMenuName, setNewMenuName] = useState("");
   const [newMenuPrice, setNewMenuPrice] = useState("");
   const [newMenuIsYakitoriSet, setNewMenuIsYakitoriSet] = useState(false);
@@ -108,13 +113,15 @@ function AdminContent() {
 
   const load = useCallback(async () => {
     try {
-      const [menuData, salesOrderData, flavorData, typeData] = await Promise.all([
+      const [menuData, salesOrderData, flavorData, typeData, categoryData] = await Promise.all([
         fetchAllMenuItemsForAdmin(),
         fetchSalesOrders(),
         fetchAllYakitoriFlavorsForAdmin(),
         fetchAllYakitoriTypesForAdmin(),
+        fetchCategories(),
       ]);
       setMenu(menuData);
+      setCategories(categoryData);
       setSalesOrders(salesOrderData);
       setYakitoriFlavors(flavorData);
       setYakitoriTypes(typeData);
@@ -278,6 +285,7 @@ function AdminContent() {
       await updateMenuItem(menuId, {
         name: newName,
         price: newPrice,
+        categoryId: editingCategoryId ? Number(editingCategoryId) : null,
         isYakitoriSet: editingIsYakitoriSet,
         yakitoriSkewerCount: editingIsYakitoriSet ? skewerCount : null,
       });
@@ -296,6 +304,11 @@ function AdminContent() {
       alert("商品名・価格を入力してください");
       return;
     }
+    // カテゴリ未設定だとお客さん画面で焼き鳥タブに出てしまうため、追加時は必ず選んでもらう。
+    if (!newMenuCategoryId) {
+      alert("カテゴリを選んでください");
+      return;
+    }
 
     const skewerCount = parseInt(newMenuSkewerCount, 10);
     if (newMenuIsYakitoriSet && (isNaN(skewerCount) || skewerCount <= 0)) {
@@ -308,6 +321,7 @@ function AdminContent() {
       await createMenuItem({
         name,
         price,
+        categoryId: Number(newMenuCategoryId),
         isYakitoriSet: newMenuIsYakitoriSet,
         yakitoriSkewerCount: newMenuIsYakitoriSet ? skewerCount : null,
       });
@@ -315,6 +329,7 @@ function AdminContent() {
       setNewMenuPrice("");
       setNewMenuIsYakitoriSet(false);
       setNewMenuSkewerCount("");
+      setNewMenuCategoryId("");
       setIsCreateMenuFormOpen(false);
       await load();
     } catch (error) {
@@ -331,6 +346,7 @@ function AdminContent() {
     setEditingPrice(item.price.toString());
     setEditingIsYakitoriSet(item.isYakitoriSet);
     setEditingSkewerCount(item.yakitoriSkewerCount?.toString() ?? "");
+    setEditingCategoryId(item.categoryId === null ? "" : String(item.categoryId));
   }
 
   function clearMenuEditing() {
@@ -339,6 +355,7 @@ function AdminContent() {
     setEditingPrice("");
     setEditingIsYakitoriSet(false);
     setEditingSkewerCount("");
+    setEditingCategoryId("");
   }
 
   async function handleCreateYakitoriFlavor() {
@@ -643,7 +660,7 @@ function AdminContent() {
 
               {isCreateMenuFormOpen && (
                 <div className="mt-3 space-y-2">
-                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1.4fr)_110px_auto_auto]">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1.4fr)_110px_140px_auto_auto]">
                     <input
                       type="text"
                       value={newMenuName}
@@ -659,6 +676,16 @@ function AdminContent() {
                       placeholder="価格"
                       className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
                     />
+                    <select
+                      value={newMenuCategoryId}
+                      onChange={(e) => setNewMenuCategoryId(e.target.value)}
+                      className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink outline-none"
+                    >
+                      <option value="">カテゴリを選択</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </select>
                     <button
                       onClick={handleCreateMenuItem}
                       disabled={isCreatingMenuItem}
@@ -673,6 +700,7 @@ function AdminContent() {
                         setNewMenuPrice("");
                         setNewMenuIsYakitoriSet(false);
                         setNewMenuSkewerCount("");
+                        setNewMenuCategoryId("");
                       }}
                       className="rounded-lg border border-line px-4 py-2 text-sm font-bold text-sub"
                     >
@@ -836,6 +864,11 @@ function AdminContent() {
                         {!item.isActive && <span className="ml-2 text-xs font-bold text-sub">非表示</span>}
                       </p>
                     )}
+                    {editingMenuId !== item.id && (
+                      <p className={`mt-1 text-xs font-bold ${item.categoryName ? "text-sub" : "text-brand-vermilion"}`}>
+                        {item.categoryName ? `カテゴリ: ${item.categoryName}` : "カテゴリ未設定（焼き鳥タブに表示されます）"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -868,6 +901,17 @@ function AdminContent() {
                         onChange={(e) => setEditingPrice(e.target.value)}
                         className="w-20 rounded-lg border border-line bg-canvas px-2 py-1 text-sm text-ink outline-none"
                       />
+
+                      <select
+                        value={editingCategoryId}
+                        onChange={(e) => setEditingCategoryId(e.target.value)}
+                        className="rounded-lg border border-line bg-canvas px-2 py-1 text-sm text-ink outline-none"
+                      >
+                        <option value="">カテゴリ未設定</option>
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                      </select>
 
                       <label className="flex items-center gap-1 text-xs text-sub">
                         <input

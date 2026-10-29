@@ -236,6 +236,19 @@ export async function fetchMenuItems(): Promise<MenuItem[]> {
   );
 }
 
+export type MenuCategory = { id: number; name: string };
+
+// 管理画面の商品追加・編集でカテゴリを選ぶ用。お客さん画面は「ドリンク」カテゴリかどうかでタブを分ける。
+export async function fetchCategories(): Promise<MenuCategory[]> {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as MenuCategory[];
+}
+
 // 管理画面用: 廃止済みも含めて全件返す
 export async function fetchAllMenuItemsForAdmin(): Promise<MenuItem[]> {
   const { data, error } = await supabase
@@ -391,7 +404,7 @@ export function optionSnapshots(menuItem: MenuItem, options: MenuOption[]): Orde
 }
 
 export async function createMenuItem(
-  item: Pick<MenuItem, "name" | "price"> & Partial<Pick<MenuItem, "isYakitoriSet" | "yakitoriSkewerCount">>
+  item: Pick<MenuItem, "name" | "price" | "categoryId"> & Partial<Pick<MenuItem, "isYakitoriSet" | "yakitoriSkewerCount">>
 ): Promise<void> {
   const { data: latest, error: latestError } = await supabase
     .from("menu_items")
@@ -404,6 +417,7 @@ export async function createMenuItem(
   const { error } = await supabase.from("menu_items").insert({
     name: item.name,
     price: item.price,
+    category_id: item.categoryId,
     code: ((latest as { code?: number } | null)?.code ?? 0) + 1,
     is_yakitori_set: item.isYakitoriSet ?? false,
     yakitori_skewer_count: item.isYakitoriSet ? item.yakitoriSkewerCount : null,
@@ -415,11 +429,12 @@ export async function createMenuItem(
 export async function updateMenuItem(
   id: number,
   updates: Partial<
-    Pick<MenuItem, "name" | "price" | "isAvailable" | "isActive" | "isYakitoriSet" | "yakitoriSkewerCount">
+    Pick<MenuItem, "name" | "price" | "categoryId" | "isAvailable" | "isActive" | "isYakitoriSet" | "yakitoriSkewerCount">
   >
 ): Promise<void> {
   const payload: Record<string, unknown> = {};
   if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.categoryId !== undefined) payload.category_id = updates.categoryId;
   if (updates.price !== undefined) payload.price = updates.price;
   if (updates.isAvailable !== undefined) payload.is_available = updates.isAvailable;
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;
