@@ -99,6 +99,7 @@ function AdminContent() {
   const [newFlavorName, setNewFlavorName] = useState("");
   const [newTypeName, setNewTypeName] = useState("");
   const [staffQrUrl, setStaffQrUrl] = useState("");
+  const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false);
 
   async function handleLogout() {
     await signOutWithRole();
@@ -492,12 +493,20 @@ function AdminContent() {
             </section>
 
             <section className="rounded-2xl border border-line bg-canvas p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-base font-black text-ink">注文履歴</p>
-                <p className="text-xs text-sub">{salesOrders.length}件</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsOrderHistoryOpen((open) => !open)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+                aria-expanded={isOrderHistoryOpen}
+              >
+                <span className="text-base font-black text-ink">注文履歴</span>
+                <span className="flex items-center gap-2 text-xs text-sub">
+                  {salesOrders.length}件
+                  <span className="text-base text-brand-indigo">{isOrderHistoryOpen ? "▲" : "▼"}</span>
+                </span>
+              </button>
 
-              {salesOrders.length > 0 ? (
+              {isOrderHistoryOpen && salesOrders.length > 0 ? (
                 <div className="space-y-3">
                   {salesOrders.map((order) => {
                     const orderItems = order.items.filter((item) => !item.parentLineId);
@@ -549,11 +558,11 @@ function AdminContent() {
                     );
                   })}
                 </div>
-              ) : (
+              ) : isOrderHistoryOpen ? (
                 <div className="rounded-xl border border-line bg-surface px-3 py-4 text-center text-sm text-sub">
                   まだ注文履歴はありません
                 </div>
-              )}
+              ) : null}
             </section>
 
             {totalSkewerCount > 0 && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, findMenuItemByCode, optionSnapshots, optionUnitPrice, resolveBundleSelections, resolveMenuOptionsByCodes } from "@/lib/menu";
+import { displayMenuItemName, fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, findMenuItemByCode, optionSnapshots, optionUnitPrice, resolveBundleSelections, resolveMenuOptionsByCodes } from "@/lib/menu";
 import { AUTH_REQUIRED_MESSAGE, NewOrderItem, placeOrder, isAuthError } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
@@ -147,7 +147,7 @@ function PosAContent() {
         setLines.push({
           key: `set-${index}`,
           menuId: menuItem.id,
-          name: menuItem.name,
+          name: displayMenuItemName(menuItem, resolvedOptions),
           price: menuItem.isSet ? menuItem.price : optionUnitPrice(menuItem, resolvedOptions),
           qty: item.qty,
           yakitoriSelections: resolved,
@@ -160,7 +160,7 @@ function PosAContent() {
       const current = merged.get(lineKey) ?? {
         key: `plain-${lineKey}`,
         menuId: menuItem.id,
-        name: menuItem.name,
+        name: displayMenuItemName(menuItem, resolvedOptions),
         price: menuItem.isSet ? menuItem.price : optionUnitPrice(menuItem, resolvedOptions),
         qty: 0,
         optionsSnapshot,
@@ -376,7 +376,7 @@ function PosAContent() {
                     )}
                     {item.bundleSelections && item.bundleSelections.length > 0 && (
                       <span className="block text-xs font-bold text-brand-indigo">
-                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${displayMenuItemName(selection.menuItem, selection.options)}${selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
                       </span>
                     )}
                     {item.yakitoriSelections && (

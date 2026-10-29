@@ -18,6 +18,7 @@ function KitchenContent() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const previousOrderIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedOrdersRef = useRef(false);
@@ -185,14 +186,22 @@ function KitchenContent() {
         <p className="mb-3 text-sm text-slate-500">対応中の注文 {kitchenOrders.length} 件</p>
 
         <section className="mb-5 rounded-2xl border-2 border-brand-vermilion/30 bg-brand-vermilion/5 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-black text-ink">販売状態</h2>
-              <p className="mt-1 text-xs text-sub">大きなトグルで品目・選択肢・焼き鳥の種類の売切れを切り替えます。</p>
-            </div>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-vermilion">厨房権限</span>
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setIsAvailabilityOpen((open) => !open)}
+            className="flex w-full items-center justify-between gap-3 text-left"
+            aria-expanded={isAvailabilityOpen}
+          >
+            <span>
+              <span className="block text-lg font-black text-ink">販売状態</span>
+              <span className="mt-1 block text-xs text-sub">品目・選択肢・焼き鳥の種類の売切れを切り替えます。</span>
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-vermilion">厨房権限</span>
+              <span className="text-base text-brand-indigo">{isAvailabilityOpen ? "▲" : "▼"}</span>
+            </span>
+          </button>
+          {isAvailabilityOpen && <div className="mt-3 space-y-3"><div className="grid gap-2 sm:grid-cols-2">
             {menu.map((item) => (
               <div key={item.id} className="rounded-xl border border-line bg-white p-3">
                 <button
@@ -246,6 +255,7 @@ function KitchenContent() {
               </div>
             </div>
           )}
+          </div>}
         </section>
 
         {loading && <div className="py-16 text-center text-slate-400">読み込み中...</div>}

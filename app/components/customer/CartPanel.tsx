@@ -1,6 +1,7 @@
 "use client";
 
 import { CartItem } from "@/types";
+import { displayMenuItemName } from "@/lib/menu";
 
 interface Props {
   cart: CartItem[];
@@ -31,7 +32,7 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
             className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3"
           >
             <div>
-              <p className="font-bold text-ink">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{c.menuItem.name}</p>
+              <p className="font-bold text-ink">{c.menuItem.emoji ? `${c.menuItem.emoji} ` : ""}{displayMenuItemName(c.menuItem, c.options)}</p>
               {c.options && c.options.length > 0 && (
                 <p className="mt-1 text-xs font-bold text-brand-indigo">
                   {c.options.map((option) => {
@@ -42,7 +43,7 @@ export default function CartPanel({ cart, total, onChangeQty, onChangeLineQty, o
               )}
               {c.bundleSelections && c.bundleSelections.length > 0 && (
                 <p className="mt-1 text-xs font-bold text-brand-indigo">
-                  {c.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                  {c.bundleSelections.map((selection) => `${selection.slotName}: ${displayMenuItemName(selection.menuItem, selection.options)}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
                 </p>
               )}
               {c.yakitoriSelections ? (

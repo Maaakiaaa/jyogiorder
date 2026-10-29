@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { serializeQrPayload } from "@/lib/qr";
+import { displayMenuItemName } from "@/lib/menu";
 import { CartItem, QrOrderPayload } from "@/types";
 
 interface Props {
@@ -103,7 +104,7 @@ export default function CheckoutPanel({ cart, total, orderId, timedOut, onBack }
           {cart.map((item) => (
             <div key={item.lineId ?? item.menuItem.id} className="flex items-start justify-between text-sm text-ink">
               <span>
-                {item.menuItem.name} x {item.qty}
+                {displayMenuItemName(item.menuItem, item.options)} x {item.qty}
                 {item.yakitoriSelections && (
                   <span className="block text-xs text-sub">
                     {item.yakitoriSelections.map((s, i) => `${i + 1}.${s.typeName}×${s.flavorName}`).join("、")}

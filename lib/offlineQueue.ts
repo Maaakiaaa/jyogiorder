@@ -1,5 +1,6 @@
 import type { NewOrderItem } from "./orders";
 import { Order, OrderPrefix } from "@/types";
+import { displayMenuItemName } from "./menu";
 
 const QUEUE_KEY = "jyogi:pending-orders";
 
@@ -107,7 +108,7 @@ export function pendingOrderToOrder(pending: PendingOrder): Order {
         slotId: selection.slotId,
         slotName: selection.slotName,
         menuItemId: selection.menuItem.id,
-        name: selection.menuItem.name,
+        name: displayMenuItemName(selection.menuItem, selection.options),
         optionsSnapshot: selection.options.length > 0 ? selection.options.map((option) => ({
           id: option.id,
           groupId: option.groupId,

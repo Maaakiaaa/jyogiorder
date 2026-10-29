@@ -307,6 +307,13 @@ export function optionUnitPrice(menuItem: MenuItem, options: MenuOption[]): numb
   return menuItem.price + options.reduce((sum, option) => sum + option.priceDelta, 0);
 }
 
+export function displayMenuItemName(menuItem: MenuItem, options: MenuOption[] = []): string {
+  if (menuItem.name !== "ゆず茶") return menuItem.name;
+  const temperatureGroup = menuItem.optionGroups.find((group) => group.name === "温度");
+  const temperature = options.find((option) => option.groupId === temperatureGroup?.id)?.name;
+  return temperature === "アイス" || temperature === "コールド" ? "ゆず茶ソーダ" : menuItem.name;
+}
+
 export function optionSnapshots(menuItem: MenuItem, options: MenuOption[]): OrderItemOptionSnapshot[] {
   return options.map((option) => ({
     id: option.id,

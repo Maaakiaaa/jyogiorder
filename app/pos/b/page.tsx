@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, optionSnapshots, optionUnitPrice } from "@/lib/menu";
+import { displayMenuItemName, fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, optionSnapshots, optionUnitPrice } from "@/lib/menu";
 import { AUTH_REQUIRED_MESSAGE, NewOrderItem, placeOrder, isAuthError } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { createOrderId } from "@/lib/qr";
@@ -175,7 +175,7 @@ function PosBContent() {
     try {
       const items: NewOrderItem[] = cart.map((item) => ({
         menuItemId: item.menuItem.id,
-        name: item.menuItem.name,
+        name: displayMenuItemName(item.menuItem, item.options),
         price: optionUnitPrice(item.menuItem, item.options ?? []),
         qty: item.qty,
         yakitoriSelections: item.yakitoriSelections?.map((s) => ({
@@ -265,7 +265,7 @@ function PosBContent() {
               {cart.map((item) => (
                 <div key={item.lineId ?? item.menuItem.id} className="flex items-start justify-between text-sm text-ink">
                   <div>
-                    <span>{item.menuItem.name}</span>
+                    <span>{displayMenuItemName(item.menuItem, item.options)}</span>
                     {item.yakitoriSelections && (
                       <span className="block text-xs text-sub">
                         {item.yakitoriSelections
@@ -283,7 +283,7 @@ function PosBContent() {
                     )}
                     {item.bundleSelections && item.bundleSelections.length > 0 && (
                       <span className="block text-xs font-bold text-brand-indigo">
-                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                        {item.bundleSelections.map((selection) => `${selection.slotName}: ${displayMenuItemName(selection.menuItem, selection.options)}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
                       </span>
                     )}
                   </div>
@@ -351,12 +351,12 @@ function PosBContent() {
               {cart.map((item) => (
                 <div key={item.lineId ?? item.menuItem.id} className="rounded-xl border border-line bg-canvas p-3 text-sm text-ink">
                   <div className="flex items-start justify-between gap-3">
-                    <span className="font-bold">{item.menuItem.name} × {item.qty}</span>
+                    <span className="font-bold">{displayMenuItemName(item.menuItem, item.options)} × {item.qty}</span>
                     <span className="font-black">¥{(optionUnitPrice(item.menuItem, item.options ?? []) * item.qty).toLocaleString()}</span>
                   </div>
                   {item.bundleSelections && item.bundleSelections.length > 0 && (
                     <p className="mt-2 text-xs font-bold text-brand-indigo">
-                      {item.bundleSelections.map((selection) => `${selection.slotName}: ${selection.menuItem.name}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
+                      {item.bundleSelections.map((selection) => `${selection.slotName}: ${displayMenuItemName(selection.menuItem, selection.options)}${selection.yakitoriSelections && selection.yakitoriSelections.length > 0 ? `（${selection.yakitoriSelections.map((skewer) => `${skewer.typeName}×${skewer.flavorName}`).join("、")}）` : selection.options.length > 0 ? `（${selection.options.map((option) => option.name).join("、")}）` : ""}`).join(" / ")}
                     </p>
                   )}
                   {item.options && item.options.length > 0 && (

@@ -9,6 +9,7 @@ import {
   removePendingOrder,
 } from "./offlineQueue";
 import { BundleSelection, Order, OrderItem, OrderItemOptionSnapshot, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
+import { displayMenuItemName } from "./menu";
 
 export const AUTH_REQUIRED_MESSAGE = "認証エラーです。再ログインしてください";
 
@@ -200,7 +201,7 @@ export async function placeOrder(
           line_id: `${parentLineId}:slot:${selection.slotId}`,
           parent_line_id: parentLineId,
           menu_item_id: selection.menuItem.id,
-          name_snapshot: `${selection.slotName}: ${selection.menuItem.name}`,
+          name_snapshot: `${selection.slotName}: ${displayMenuItemName(selection.menuItem, selection.options)}`,
           price_snapshot: 0,
           qty: item.qty,
           yakitori_selections: selection.yakitoriSelections?.map((skewer) => ({
