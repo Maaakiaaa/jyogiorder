@@ -7,6 +7,7 @@ import { peekNextNumber } from "@/lib/numbering";
 import { createOrderId } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import RenumberAlert from "@/app/components/pos/RenumberAlert";
+import IssuedNumberOverlay from "@/app/components/pos/IssuedNumberOverlay";
 import YakitoriSetModal from "@/app/components/shared/YakitoriSetModal";
 import MenuOptionsModal from "@/app/components/shared/MenuOptionsModal";
 import BundleSetModal from "@/app/components/shared/BundleSetModal";
@@ -35,6 +36,8 @@ function PosBContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCheckoutConfirmation, setShowCheckoutConfirmation] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
+  // 「次のお客様へ」で閉じた後も、番号を聞き返されたときに答えられるよう直前の番号だけ残す。
+  const [lastIssuedNumber, setLastIssuedNumber] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [nextNumber, setNextNumber] = useState("-");
   const { pendingCount: pendingSyncCount, lastError: pendingSyncError, renumberNotices, numberingSyncCount, numberingSyncError } = usePendingSync("B");
@@ -208,7 +211,10 @@ function PosBContent() {
           </p>
           <h1 className="neon-title mt-2 text-2xl text-ink">B端末（店頭）</h1>
           <p className="mt-2 text-sm text-sub">その場で品目を選び、会計と同時に番号を発行します。</p>
-          <p className="mt-1 text-xs text-sub">次に発行される番号: {nextNumber}</p>
+          <p className="mt-1 text-xs text-sub">
+            次に発行される番号: {nextNumber}
+            {lastIssuedNumber && <span className="ml-3">直前の番号: <span className="font-bold text-ink">{lastIssuedNumber}</span></span>}
+          </p>
           {numberingSyncError && (
             <p className="mt-1 text-xs text-brand-gold">使用済み番号との照合ができていません（通信復帰時に再確認します）</p>
           )}
@@ -228,13 +234,15 @@ function PosBContent() {
         )}
 
         {confirmedOrder && (
-          <section className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-center">
-            <p className="text-sm font-bold uppercase tracking-[0.16em] text-emerald-700">
-              会計完了・番号発行
-            </p>
-            <p className="mt-2 text-5xl font-black text-ink">{confirmedOrder.number}</p>
-            <p className="mt-2 text-sm text-emerald-700">紙の番号札を渡してください。</p>
-          </section>
+          <IssuedNumberOverlay
+            number={confirmedOrder.number}
+            instruction="この番号の番号札を渡してください"
+            buttonLabel="渡した → 次のお客様へ"
+            onNext={() => {
+              setLastIssuedNumber(confirmedOrder.number);
+              setConfirmedOrder(null);
+            }}
+          />
         )}
 
         <section className="mt-4 rounded-2xl border border-line bg-canvas p-4">
