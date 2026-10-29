@@ -150,7 +150,7 @@ export default function WaitingPanel({ order, orders, activeOrderId, onSelectOrd
         >
           {notificationEnabled ? "🔔 できあがり通知 ON" : "🔔 できあがりをお知らせ"}
         </button>
-        {!notificationEnabled && <p className="mt-2 text-center text-xs font-bold text-brand-vermilion">タップすると振動・通知・音を有効にします</p>}
+        {!notificationEnabled && <p className="mt-2 text-center text-xs font-bold text-brand-vermilion">タップすると通知音を有効にします</p>}
         <h1 className="mt-2 text-2xl neon-title text-ink">お客様情報</h1>
 
         <div className="mt-4 rounded-2xl border border-line bg-canvas p-3">
