@@ -11,10 +11,10 @@ interface Props {
   onCancel: () => void;
 }
 
-function unavailable(item: MenuItem): boolean {
+function unavailable(item: MenuItem, types: YakitoriType[]): boolean {
   return !item.isAvailable || !item.isActive || item.optionGroups.some(
     (group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)
-  );
+  ) || (item.isYakitoriSet && types.filter((type) => type.isActive).length > 0 && types.filter((type) => type.isActive).every((type) => !type.isAvailable));
 }
 
 export default function BundleSetModal({ menuItem, flavors, types, onConfirm, onCancel }: Props) {
@@ -144,7 +144,7 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
                       <button
                         key={item.id}
                         type="button"
-                        disabled={unavailable(item)}
+                        disabled={unavailable(item, types)}
                         onClick={() => selectItem(slot.id, item)}
                         className={`rounded-xl border px-3 py-2 text-left text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40 ${
                           selectedItems[slot.id] === item.id ? "border-brand-indigo bg-brand-indigo text-white" : "border-line bg-surface text-sub"
@@ -152,7 +152,7 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
                       >
                         <span className="block">{item.name}</span>
                         <span className="mt-1 block text-xs font-medium">
-                          {unavailable(item) ? "売り切れ" : item.name === "けろこラテ" ? "ホットのみ" : `単品 ¥${item.price.toLocaleString()}`}
+                          {unavailable(item, types) ? "売り切れ" : item.name === "けろこラテ" ? "ホットのみ" : `単品 ¥${item.price.toLocaleString()}`}
                         </span>
                       </button>
                     ))}
@@ -205,8 +205,8 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
                           <span className="w-12 shrink-0 pt-1 text-xs font-bold text-sub">種類：</span>
                           <div className="flex flex-wrap gap-2">
                             {types.map((type) => (
-                              <button key={type.id} type="button" onClick={() => selectYakitori(slot.id, index, "typeId", type.id)} className={`rounded-full border px-3 py-1 text-xs font-bold ${draft.typeId === type.id ? "border-brand-gold bg-brand-gold text-white" : "border-line bg-white text-sub"}`}>
-                                {type.name}
+                              <button key={type.id} type="button" disabled={!type.isAvailable} onClick={() => selectYakitori(slot.id, index, "typeId", type.id)} className={`rounded-full border px-3 py-1 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40 ${draft.typeId === type.id ? "border-brand-gold bg-brand-gold text-white" : "border-line bg-white text-sub"}`}>
+                                {type.name}{!type.isAvailable ? "（売切）" : ""}
                               </button>
                             ))}
                           </div>

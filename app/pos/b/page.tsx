@@ -57,6 +57,7 @@ function PosBContent() {
       .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => void loadMenu())
       .on("postgres_changes", { event: "*", schema: "public", table: "option_groups" }, () => void loadMenu())
       .on("postgres_changes", { event: "*", schema: "public", table: "options" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_types" }, () => void loadMenu())
       .subscribe();
     return () => {
       cancelled = true;
@@ -67,6 +68,23 @@ function PosBContent() {
   useEffect(() => {
     setNextNumber(peekNextNumber("B"));
   }, [confirmedOrder]);
+
+  function isYakitoriTypeSoldout() {
+    const activeTypes = yakitoriTypes.filter((type) => type.isActive);
+    return activeTypes.length > 0 && activeTypes.every((type) => !type.isAvailable);
+  }
+
+  function isItemSoldout(item: MenuItem) {
+    return !item.isAvailable ||
+      item.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)) ||
+      ((item.isYakitoriSet || item.name === "焼き鳥") && isYakitoriTypeSoldout()) ||
+      (item.isSet && item.bundleSlots.some((slot) => slot.candidateItems.length === 0 || slot.candidateItems.every((candidate) =>
+        !candidate.isAvailable ||
+        !candidate.isActive ||
+        candidate.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)) ||
+        (candidate.isYakitoriSet && isYakitoriTypeSoldout())
+      )));
+  }
 
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + optionUnitPrice(item.menuItem, item.options ?? []) * item.qty, 0),
@@ -220,7 +238,7 @@ function PosBContent() {
               <button
                 key={item.id}
                 onClick={() => addItem(item)}
-                disabled={!item.isAvailable || item.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)) || (item.isSet && item.bundleSlots.some((slot) => slot.candidateItems.length === 0 || slot.candidateItems.every((candidate) => !candidate.isAvailable || !candidate.isActive || candidate.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive)))))}
+                disabled={isItemSoldout(item)}
                 className="rounded-xl border border-line bg-surface px-3 py-3 text-left text-sm text-ink disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <span className="block font-bold">
@@ -228,7 +246,7 @@ function PosBContent() {
                   {item.isYakitoriSet && (
                     <span className="ml-1 text-xs font-bold text-brand-gold">{item.yakitoriSkewerCount}本</span>
                   )}
-                    {(!item.isAvailable || item.optionGroups.some((group) => group.required && group.options.every((option) => !option.isAvailable || !option.isActive))) && <span className="ml-1 text-xs text-brand-vermilion">SOLDOUT</span>}
+                    {isItemSoldout(item) && <span className="ml-1 text-xs text-brand-vermilion">SOLDOUT</span>}
                 </span>
                 <span className="mt-1 block text-xs text-sub">¥{item.price}</span>
               </button>

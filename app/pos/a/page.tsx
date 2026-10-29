@@ -58,6 +58,7 @@ function PosAContent() {
       .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => void loadMenu())
       .on("postgres_changes", { event: "*", schema: "public", table: "option_groups" }, () => void loadMenu())
       .on("postgres_changes", { event: "*", schema: "public", table: "options" }, () => void loadMenu())
+      .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_types" }, () => void loadMenu())
       .subscribe();
     return () => {
       cancelled = true;
@@ -97,9 +98,38 @@ function PosAContent() {
         missing = true;
         return;
       }
+      const resolvedBundleSelections = bundleSelections.map((selection) => {
+        const qrSelection = item.bundleSelections?.find((candidate) => candidate.slotId === selection.slotId);
+        const yakitoriSelections = qrSelection?.yakitoriSelections?.map((skewer) => {
+          const flavor = yakitoriFlavors.find((candidate) => candidate.id === skewer.flavorId);
+          const type = yakitoriTypes.find((candidate) => candidate.id === skewer.typeId);
+          if (!flavor || !type || !type.isAvailable) {
+            missing = true;
+            return null;
+          }
+          return {
+            flavorId: flavor.id,
+            flavorName: flavor.name,
+            typeId: type.id,
+            typeName: type.name,
+          };
+        });
+        if (yakitoriSelections?.some((selection) => selection === null)) return null;
+        return {
+          ...selection,
+          ...(yakitoriSelections ? { yakitoriSelections: yakitoriSelections as NonNullable<typeof selection.yakitoriSelections> } : {}),
+        };
+      });
+      if (resolvedBundleSelections.some((selection) => selection === null)) {
+        missing = true;
+        return;
+      }
       const resolvedOptions = options ?? [];
       const optionsSnapshot = optionSnapshots(menuItem, resolvedOptions);
-      const lineKey = `${menuItem.code}:${resolvedOptions.map((option) => option.code).sort((a, b) => a - b).join(",")}:${(bundleSelections ?? []).map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",")}`;
+      const validBundleSelections = resolvedBundleSelections.filter(
+        (selection): selection is BundleSelection => selection !== null
+      );
+      const lineKey = `${menuItem.code}:${resolvedOptions.map((option) => option.code).sort((a, b) => a - b).join(",")}:${validBundleSelections.map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",")}`;
 
       // ドリンクと焼き鳥セットは串の選択が異なりうるため、同じ商品IDでもqtyでまとめず1回の購入=1行として扱う。
       if (item.yakitoriSelections) {
@@ -107,7 +137,7 @@ function PosAContent() {
         for (const selection of item.yakitoriSelections) {
           const flavor = yakitoriFlavors.find((f) => f.id === selection.flavorId);
           const type = yakitoriTypes.find((t) => t.id === selection.typeId);
-          if (!flavor || !type) {
+          if (!flavor || !type || !type.isAvailable) {
             missing = true;
             return;
           }
@@ -122,7 +152,7 @@ function PosAContent() {
           qty: item.qty,
           yakitoriSelections: resolved,
           optionsSnapshot,
-          bundleSelections: bundleSelections ?? [],
+          bundleSelections: validBundleSelections,
         });
         return;
       }
@@ -134,7 +164,7 @@ function PosAContent() {
         price: menuItem.isSet ? menuItem.price : optionUnitPrice(menuItem, resolvedOptions),
         qty: 0,
         optionsSnapshot,
-        bundleSelections: bundleSelections ?? [],
+        bundleSelections: validBundleSelections,
       };
 
       current.qty += item.qty;

@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MenuItem, Order, OrderStatus } from "@/types";
+import { MenuItem, Order, OrderStatus, YakitoriType } from "@/types";
 import { fetchActiveOrders, fetchRecentCancelledOrders, updateOrderStatus } from "@/lib/orders";
-import { fetchMenuItems, setItemAvailable, setOptionAvailable } from "@/lib/menu";
+import { fetchMenuItems, fetchYakitoriTypes, setItemAvailable, setOptionAvailable, setYakitoriTypeAvailable } from "@/lib/menu";
 import { createNotificationAudio, playNotificationAudio, unlockNotificationAudio } from "@/lib/notificationSound";
 import { supabase } from "@/lib/supabase";
 import OrderCard from "@/app/components/kitchen/OrderCard";
@@ -13,6 +13,7 @@ function KitchenContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -23,7 +24,7 @@ function KitchenContent() {
 
   const load = useCallback(async () => {
     try {
-      const [active, cancelled, menuItems] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders(), fetchMenuItems()]);
+      const [active, cancelled, menuItems, types] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders(), fetchMenuItems(), fetchYakitoriTypes()]);
       if (!hasLoadedOrdersRef.current) {
         previousOrderIdsRef.current = new Set(active.map((order) => order.id));
         hasLoadedOrdersRef.current = true;
@@ -31,6 +32,7 @@ function KitchenContent() {
       setOrders(active);
       setCancelledOrders(cancelled);
       setMenu(menuItems);
+      setYakitoriTypes(types);
     } catch {
       // silent
     } finally {
@@ -61,6 +63,9 @@ function KitchenContent() {
     const channel = supabase
       .channel("kitchen-orders")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "options" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_types" }, () => load())
       .subscribe();
 
     // 購読の再接続だけに頼らず、画面が前面に戻った時にも現在状態を取り直す(保険)。
@@ -111,6 +116,18 @@ function KitchenContent() {
       await load();
     } catch (error) {
       alert(`選択肢の切り替えに失敗しました: ${error instanceof Error ? error.message : "権限または通信エラー"}`);
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  async function toggleYakitoriType(typeId: number, available: boolean) {
+    setUpdating(`yakitori-type-${typeId}`);
+    try {
+      await setYakitoriTypeAvailable(typeId, !available);
+      await load();
+    } catch (error) {
+      alert(`焼き鳥種類の切り替えに失敗しました: ${error instanceof Error ? error.message : "権限または通信エラー"}`);
     } finally {
       setUpdating(null);
     }
@@ -171,7 +188,7 @@ function KitchenContent() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-black text-ink">販売状態</h2>
-              <p className="mt-1 text-xs text-sub">大きなトグルで品目・選択肢の売切れを切り替えます。</p>
+              <p className="mt-1 text-xs text-sub">大きなトグルで品目・選択肢・焼き鳥の種類の売切れを切り替えます。</p>
             </div>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-brand-vermilion">厨房権限</span>
           </div>
@@ -206,6 +223,29 @@ function KitchenContent() {
               </div>
             ))}
           </div>
+          {yakitoriTypes.length > 0 && (
+            <div className="mt-3 rounded-xl border border-brand-gold/40 bg-brand-gold/5 p-3">
+              <p className="text-sm font-black text-ink">焼き鳥の種類</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {yakitoriTypes.map((type) => (
+                  <button
+                    key={type.id}
+                    type="button"
+                    onClick={() => void toggleYakitoriType(type.id, type.isAvailable)}
+                    disabled={updating !== null || !type.isActive}
+                    className={`flex min-h-11 items-center justify-between rounded-xl border-2 px-3 text-left text-sm font-black transition disabled:opacity-50 ${
+                      type.isAvailable
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-800"
+                        : "border-brand-vermilion bg-brand-vermilion/10 text-brand-vermilion"
+                    }`}
+                  >
+                    <span>{type.name}</span>
+                    <span>{type.isAvailable ? "販売中" : "売切れ"}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {loading && <div className="py-16 text-center text-slate-400">読み込み中...</div>}

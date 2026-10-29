@@ -47,8 +47,15 @@ export default function MenuPanel({
     );
   }
 
+  function isYakitoriTypeSoldout() {
+    const activeTypes = yakitoriTypes.filter((type) => type.isActive);
+    return activeTypes.length > 0 && activeTypes.every((type) => !type.isAvailable);
+  }
+
   function isBundleSoldout(item: MenuItem) {
-    return item.bundleSlots.some((slot) => slot.candidateItems.length === 0 || slot.candidateItems.every(isOptionSoldout));
+    return item.bundleSlots.some((slot) => slot.candidateItems.length === 0 || slot.candidateItems.every((candidate) =>
+      isOptionSoldout(candidate) || (candidate.isYakitoriSet && isYakitoriTypeSoldout())
+    ));
   }
 
   const visibleMenu = menu.filter((item) => activeTag === "drink" ? item.categoryName === "ドリンク" : item.categoryName !== "ドリンク");
@@ -73,7 +80,9 @@ export default function MenuPanel({
       </div>
 
       {visibleMenu.map((item) => {
-        const isSoldout = !item.isAvailable || isOptionSoldout(item) || (item.isSet && isBundleSoldout(item));
+        const isSoldout = !item.isAvailable || isOptionSoldout(item) ||
+          ((item.isYakitoriSet || item.name === "焼き鳥") && isYakitoriTypeSoldout()) ||
+          (item.isSet && isBundleSoldout(item));
         const hasOptions = item.optionGroups.length > 0;
 
         return (

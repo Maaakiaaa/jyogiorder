@@ -33,6 +33,10 @@ export default function CheckoutPanel({ cart, total, orderId, timedOut, onBack }
           slotId: selection.slotId,
           menuCode: selection.menuItem.code,
           optionCodes: selection.options.length > 0 ? selection.options.map((option) => option.code) : undefined,
+          yakitoriSelections: selection.yakitoriSelections?.map((skewer) => ({
+            flavorId: skewer.flavorId,
+            typeId: skewer.typeId,
+          })),
         })),
       })),
     }),

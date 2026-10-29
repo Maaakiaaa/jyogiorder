@@ -62,6 +62,7 @@ export interface YakitoriType {
   id: number;
   name: string;
   sortOrder: number;
+  isAvailable: boolean;
   isActive: boolean;
 }
 

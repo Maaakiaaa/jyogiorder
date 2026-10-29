@@ -91,13 +91,14 @@ export default function YakitoriSetModal({ menuItem, flavors, types, onConfirm, 
                     <button
                       key={type.id}
                       onClick={() => setType(index, type.id)}
-                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                      disabled={!type.isAvailable}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-40 ${
                         draft.typeId === type.id
                           ? "border-brand-gold bg-brand-gold text-white"
                           : "border-line bg-surface text-sub"
                       }`}
                     >
-                      {type.name}
+                      {type.name}{!type.isAvailable ? "（売切）" : ""}
                     </button>
                   ))}
                 </div>

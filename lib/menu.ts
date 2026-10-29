@@ -62,6 +62,7 @@ type YakitoriTypeRow = {
   id: number;
   name: string;
   sort_order: number;
+  is_available: boolean;
   is_active: boolean;
 };
 
@@ -161,7 +162,7 @@ function flavorFromRow(row: YakitoriFlavorRow): YakitoriFlavor {
 }
 
 function typeFromRow(row: YakitoriTypeRow): YakitoriType {
-  return { id: row.id, name: row.name, sortOrder: row.sort_order, isActive: row.is_active };
+  return { id: row.id, name: row.name, sortOrder: row.sort_order, isAvailable: row.is_available, isActive: row.is_active };
 }
 
 function attachBundleSlots(items: MenuItem[], rows: BundleSlotRow[]): MenuItem[] {
@@ -369,6 +370,14 @@ export async function setOptionAvailable(id: number, isAvailable: boolean): Prom
   if (error) throw error;
 }
 
+export async function setYakitoriTypeAvailable(id: number, isAvailable: boolean): Promise<void> {
+  const { error } = await supabase.rpc("set_yakitori_type_available", {
+    p_type_id: id,
+    p_is_available: isAvailable,
+  });
+  if (error) throw error;
+}
+
 // お客さん画面・POS用: 有効な味だけを表示順で返す
 export async function fetchYakitoriFlavors(): Promise<YakitoriFlavor[]> {
   const { data, error } = await supabase
@@ -438,11 +447,12 @@ export async function updateYakitoriFlavor(
 
 export async function updateYakitoriType(
   id: number,
-  updates: Partial<Pick<YakitoriType, "name" | "isActive">>
+  updates: Partial<Pick<YakitoriType, "name" | "isActive" | "isAvailable">>
 ): Promise<void> {
   const payload: Record<string, unknown> = {};
   if (updates.name !== undefined) payload.name = updates.name;
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+  if (updates.isAvailable !== undefined) payload.is_available = updates.isAvailable;
 
   const { error } = await supabase.from("yakitori_types").update(payload).eq("id", id);
   if (error) throw error;

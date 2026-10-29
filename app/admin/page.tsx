@@ -17,6 +17,7 @@ import {
   updateYakitoriFlavor,
   updateYakitoriType,
   setItemAvailable,
+  setYakitoriTypeAvailable,
 } from "@/lib/menu";
 import { supabase } from "@/lib/supabase";
 import DonutChart from "@/app/components/admin/DonutChart";
@@ -236,6 +237,7 @@ function AdminContent() {
       .channel("admin-data")
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => load())
       .on("postgres_changes", { event: "*", schema: "public", table: "menu_items" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "yakitori_types" }, () => load())
       .subscribe();
 
     return () => {
@@ -357,6 +359,15 @@ function AdminContent() {
   async function handleToggleYakitoriType(id: number, currentActive: boolean) {
     try {
       await updateYakitoriType(id, { isActive: !currentActive });
+      await load();
+    } catch (error) {
+      alert(`更新に失敗しました: ${getErrorMessage(error)}`);
+    }
+  }
+
+  async function handleYakitoriTypeAvailableToggle(id: number, currentAvailable: boolean) {
+    try {
+      await setYakitoriTypeAvailable(id, !currentAvailable);
       await load();
     } catch (error) {
       alert(`更新に失敗しました: ${getErrorMessage(error)}`);
@@ -600,7 +611,7 @@ function AdminContent() {
             <section className="rounded-2xl border border-line bg-canvas p-4">
               <p className="text-base font-black text-ink">焼き鳥の味・種類</p>
               <p className="mt-1 text-xs text-sub">
-                串の味(たれ/塩など)と種類(もも/ねぎま/かわなど)を管理します。無効化すると、以後お客様画面・POSの選択肢から外れます。
+                串の味(たれ/塩など)と種類(もも/ねぎま/かわなど)を管理します。                無効化すると選択肢から外れます。販売中/SOLDOUTは当日の在庫切替です。
               </p>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -656,16 +667,29 @@ function AdminContent() {
                         <span className={`text-sm ${type.isActive ? "text-ink" : "text-sub line-through"}`}>
                           {type.name}
                         </span>
-                        <button
-                          onClick={() => handleToggleYakitoriType(type.id, type.isActive)}
-                          className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                            type.isActive
-                              ? "border-emerald-400/60 bg-emerald-50 text-emerald-700"
-                              : "border-line text-sub"
-                          }`}
-                        >
-                          {type.isActive ? "有効" : "無効"}
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleYakitoriTypeAvailableToggle(type.id, type.isAvailable)}
+                            disabled={!type.isActive}
+                            className={`rounded-full border px-3 py-1 text-xs font-bold disabled:opacity-40 ${
+                              type.isAvailable
+                                ? "border-emerald-400/60 bg-emerald-50 text-emerald-700"
+                                : "border-brand-vermilion/50 bg-brand-vermilion/10 text-brand-vermilion"
+                            }`}
+                          >
+                            {type.isAvailable ? "販売中" : "SOLDOUT"}
+                          </button>
+                          <button
+                            onClick={() => handleToggleYakitoriType(type.id, type.isActive)}
+                            className={`rounded-full border px-3 py-1 text-xs font-bold ${
+                              type.isActive
+                                ? "border-line text-sub"
+                                : "border-line text-sub"
+                            }`}
+                          >
+                            {type.isActive ? "有効" : "無効"}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
