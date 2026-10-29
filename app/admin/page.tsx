@@ -37,6 +37,23 @@ type SkewerSales = {
   qty: number;
 };
 
+const ORDER_STATUS_LABELS: Record<Order["status"], string> = {
+  received: "受付",
+  cooking: "調理中",
+  ready: "受け渡し待ち",
+  handed: "受け渡し済み",
+  cancelled: "キャンセル",
+};
+
+function formatOrderDate(value: string) {
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
 function getErrorMessage(error: unknown) {
   if (typeof error === "string") return error;
 
@@ -448,6 +465,9 @@ function AdminContent() {
                   {totalSoldCount}個 / ¥{totalSalesAmount.toLocaleString()}
                 </p>
               </div>
+              <p className="mb-3 text-xs text-sub">
+                売上額は各注文が成立した時点の単価で集計しています。現在の商品価格を後から変更しても、過去の売上額は変わりません。
+              </p>
 
               <div className="space-y-2">
                 {productSales.length > 0 ? (
@@ -469,6 +489,71 @@ function AdminContent() {
                   </div>
                 )}
               </div>
+            </section>
+
+            <section className="rounded-2xl border border-line bg-canvas p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-base font-black text-ink">注文履歴</p>
+                <p className="text-xs text-sub">{salesOrders.length}件</p>
+              </div>
+
+              {salesOrders.length > 0 ? (
+                <div className="space-y-3">
+                  {salesOrders.map((order) => {
+                    const orderItems = order.items.filter((item) => !item.parentLineId);
+                    return (
+                      <article key={order.id} className="rounded-xl border border-line bg-surface p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-base font-black text-ink">注文 {order.number}</p>
+                            <p className="mt-1 text-xs text-sub">
+                              {formatOrderDate(order.created_at)} ・ {ORDER_STATUS_LABELS[order.status]}
+                            </p>
+                          </div>
+                          <p className="text-lg font-black text-brand-indigo">¥{order.total.toLocaleString()}</p>
+                        </div>
+
+                        <div className="mt-3 space-y-2 border-t border-line pt-3">
+                          {orderItems.map((item) => {
+                            const childItems = order.items.filter((child) => child.parentLineId === item.lineId);
+                            return (
+                              <div key={item.lineId ?? `${order.id}-${item.name}`} className="flex items-start justify-between gap-3 text-sm">
+                                <div className="min-w-0">
+                                  <p className="font-bold text-ink">{item.name} × {item.qty}</p>
+                                  {item.optionsSnapshot && item.optionsSnapshot.length > 0 && (
+                                    <p className="mt-1 text-xs text-sub">
+                                      {item.optionsSnapshot.map((option) => `${option.groupName}: ${option.name}`).join(" / ")}
+                                    </p>
+                                  )}
+                                  {item.yakitoriSelections && item.yakitoriSelections.length > 0 && (
+                                    <p className="mt-1 text-xs text-sub">
+                                      {item.yakitoriSelections.map((skewer, index) => `${index + 1}.${skewer.typeName}×${skewer.flavorName}`).join("、")}
+                                    </p>
+                                  )}
+                                  {childItems.length > 0 && (
+                                    <div className="mt-1 border-l-2 border-line pl-2 text-xs text-sub">
+                                      {childItems.map((child) => (
+                                        <p key={child.lineId ?? `${order.id}-${child.name}`}>{child.name} × {child.qty}</p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <p className="shrink-0 font-bold text-ink">
+                                  ¥{(item.price * item.qty).toLocaleString()}
+                                </p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-line bg-surface px-3 py-4 text-center text-sm text-sub">
+                  まだ注文履歴はありません
+                </div>
+              )}
             </section>
 
             {totalSkewerCount > 0 && (

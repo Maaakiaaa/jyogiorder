@@ -70,10 +70,11 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
   function groupsToAsk(item: MenuItem, choices: Record<number, number>) {
     const temperature = item.optionGroups.find((group) => group.name === "温度");
     if (!temperature) return item.optionGroups;
-    if (choices[temperature.id] === undefined) return [temperature];
+    if (temperature.required && choices[temperature.id] === undefined) return [temperature];
+    if (choices[temperature.id] === undefined) return item.optionGroups.filter((group) => group.name !== "温度");
     return isCold(item, choices)
       ? item.optionGroups.filter((group) => group.name === "割り方")
-      : [];
+      : item.optionGroups.filter((group) => group.name !== "温度" && group.name !== "割り方");
   }
 
   const selections = menuItem.bundleSlots.map((slot) => {
@@ -103,9 +104,9 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
     const temperature = selection.menuItem.optionGroups.find((group) => group.name === "温度");
     const isColdSelection = temperature
       ? ["アイス", "コールド"].includes(selection.options.find((option) => option.groupId === temperature.id)?.name ?? "")
-      : false;
+      : true;
     return selection.menuItem.optionGroups.every((group) => {
-      if (group.name === "割り方" && !isColdSelection) return true;
+      if (group.name === "割り方" && temperature?.required && !isColdSelection) return true;
       return !group.required || selection.options.some((option) => option.groupId === group.id);
     });
   }

@@ -35,12 +35,16 @@ export default function MenuOptionsModal({ menuItem, onConfirm, onCancel }: Prop
   function groupsToAsk() {
     const temperatureGroup = availableGroups.find((group) => group.name === "温度");
     if (!temperatureGroup) return availableGroups;
-    if (selectedByGroup[temperatureGroup.id] === undefined) return [temperatureGroup];
+    if (temperatureGroup.required && selectedByGroup[temperatureGroup.id] === undefined) return [temperatureGroup];
+    if (selectedByGroup[temperatureGroup.id] === undefined) {
+      return availableGroups.filter((group) => group.name !== "温度");
+    }
     return availableGroups.filter((group) => group.name !== "温度" && (group.name !== "割り方" || isColdSelected()));
   }
 
   const isComplete = availableGroups.every((group) => {
-    if (group.name === "割り方" && !isColdSelected()) return true;
+    if (group.name === "割り方" && availableGroups.some((candidate) => candidate.name === "温度") &&
+      availableGroups.find((candidate) => candidate.name === "温度")?.required && !isColdSelected()) return true;
     return !group.required || selectedByGroup[group.id] !== undefined;
   });
 
