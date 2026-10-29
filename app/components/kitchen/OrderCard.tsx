@@ -55,6 +55,11 @@ export default function OrderCard({ order, now, isUpdating, onAdvance, onBack, o
           </div>
         </div>
         <div className="space-y-1">
+          {order.items.length === 0 && (
+            <p className="rounded-lg bg-white px-3 py-2 text-sm font-bold text-brand-vermilion">
+              品目を受信中…（届かない場合は受付端末の画面で中身を確認してください）
+            </p>
+          )}
           {order.items.map((i, idx) => (
             <p key={idx} className="text-base text-ink">
               {i.name} x {i.qty}

@@ -4,6 +4,7 @@ import {
   enqueuePendingOrder,
   getPendingOrder,
   listPendingOrders,
+  PendingOrder,
   pendingOrderToOrder,
   recordPendingOrderFailure,
   removePendingOrder,
@@ -105,6 +106,78 @@ async function findExistingOrder(orderId: string): Promise<Order | null> {
   return fromRows(data as OrderRow, await fetchItemsForOrder(orderId));
 }
 
+function buildOrderItemRows(orderId: string, items: NewOrderItem[]) {
+  return items.flatMap((item, index) => {
+    const parentLineId = item.lineId ?? `${orderId}:line:${index}`;
+    const parent = {
+      order_id: orderId,
+      line_id: parentLineId,
+      parent_line_id: null,
+      menu_item_id: item.menuItemId,
+      name_snapshot: item.name,
+      price_snapshot: item.price,
+      qty: item.qty,
+      yakitori_selections: item.yakitoriSelections ?? null,
+      options_snapshot: item.optionsSnapshot ?? null,
+    };
+    if (!item.bundleSelections || item.bundleSelections.length === 0) return [parent];
+    return [
+      parent,
+      ...item.bundleSelections.map((selection) => ({
+        order_id: orderId,
+        line_id: `${parentLineId}:slot:${selection.slotId}`,
+        parent_line_id: parentLineId,
+        menu_item_id: selection.menuItem.id,
+        name_snapshot: `${selection.slotName}: ${displayMenuItemName(selection.menuItem, selection.options)}`,
+        price_snapshot: 0,
+        qty: item.qty,
+        yakitori_selections: selection.yakitoriSelections?.map((skewer) => ({
+          flavorName: skewer.flavorName,
+          typeName: skewer.typeName,
+        })) ?? null,
+        options_snapshot: selection.options.length > 0 ? selection.options.map((option) => ({
+          id: option.id,
+          groupId: option.groupId,
+          groupName: selection.menuItem.optionGroups.find((group) => group.id === option.groupId)?.name ?? "選択肢",
+          name: option.name,
+          priceDelta: option.priceDelta,
+        })) : null,
+      })),
+    ];
+  });
+}
+
+// 明細はまとめて1回のinsertなので、全件入るか1件も入らないかのどちらか。line_id は再送しても
+// 同じ値になり (order_id, line_id) が一意なので、応答だけ失われて実は入っていた場合の重複は
+// unique制約違反として「登録済み」とみなす。
+async function insertOrderItems(orderId: string, items: NewOrderItem[]): Promise<void> {
+  const { error } = await supabase.from("order_items").insert(buildOrderItemRows(orderId, items));
+  if (error && error.code !== "23505") throw error;
+}
+
+// 注文行の登録後に明細の登録だけが失敗していると、再送時に「既に登録済み」として終わらせた場合
+// 品目が空の注文が調理場に残ってしまう。キューに中身が残っていれば明細を書き足して完成させる。
+async function completeExistingOrder(existing: Order, pending: PendingOrder | null): Promise<Order> {
+  if (existing.items.length > 0 || !pending) {
+    removePendingOrder(existing.id);
+    return existing;
+  }
+
+  try {
+    await insertOrderItems(existing.id, pending.items);
+  } catch (error) {
+    if (isAuthError(error)) {
+      recordPendingOrderFailure(existing.id, AUTH_REQUIRED_MESSAGE);
+      throw new Error(AUTH_REQUIRED_MESSAGE);
+    }
+    return pendingOrderToOrder(recordPendingOrderFailure(existing.id, error) ?? pending);
+  }
+
+  removePendingOrder(existing.id);
+  const completed = await findExistingOrder(existing.id).catch(() => null);
+  return completed ?? { ...existing, items: pendingOrderToOrder(pending).items };
+}
+
 // 冪等な注文確定: 同じ orderId が二度渡された場合(二重スキャン・オフライン復帰後の再送)は、
 // 新規作成せず既存の注文をそのまま返す。番号は既存注文(またはオフラインキューに確保済みの分)が
 // あればそれを使い、まだどこにもなければここで一度だけ issueNextNumber() する。
@@ -140,10 +213,7 @@ export async function placeOrder(
     return pendingOrderToOrder(recordPendingOrderFailure(orderId, error) ?? pendingOrder);
   }
 
-  if (existing) {
-    removePendingOrder(orderId);
-    return existing;
-  }
+  if (existing) return completeExistingOrder(existing, pending);
 
   const total = pending?.total ?? orderTotalFromNewItems(items);
   let { seq, number } = pending ?? issueNextNumber(prefix);
@@ -182,10 +252,7 @@ export async function placeOrder(
 
       // unique制約違反には2種類ある。orders.id の重複 = 別経路で既に登録済みなので既存注文を返す。
       const raced = await findExistingOrder(orderId);
-      if (raced) {
-        removePendingOrder(orderId);
-        return raced;
-      }
+      if (raced) return completeExistingOrder(raced, getPendingOrder(orderId));
 
       // (prefix, seq) の重複 = 端末の採番位置が巻き戻った(端末交換・ストレージ消去)か、
       // 同じ記号の端末が2台ある。通信失敗として再送し続けても永遠に通らないので、
@@ -204,47 +271,7 @@ export async function placeOrder(
       recordRenumberNotice({ orderId, prefix, from: originalNumber, to: number, at: new Date().toISOString() });
     }
 
-    const expandedItems = items.flatMap((item, index) => {
-      const parentLineId = item.lineId ?? `${orderId}:line:${index}`;
-      const parent = {
-        order_id: orderId,
-        line_id: parentLineId,
-        parent_line_id: null,
-        menu_item_id: item.menuItemId,
-        name_snapshot: item.name,
-        price_snapshot: item.price,
-        qty: item.qty,
-        yakitori_selections: item.yakitoriSelections ?? null,
-        options_snapshot: item.optionsSnapshot ?? null,
-      };
-      if (!item.bundleSelections || item.bundleSelections.length === 0) return [parent];
-      return [
-        parent,
-        ...item.bundleSelections.map((selection) => ({
-          order_id: orderId,
-          line_id: `${parentLineId}:slot:${selection.slotId}`,
-          parent_line_id: parentLineId,
-          menu_item_id: selection.menuItem.id,
-          name_snapshot: `${selection.slotName}: ${displayMenuItemName(selection.menuItem, selection.options)}`,
-          price_snapshot: 0,
-          qty: item.qty,
-          yakitori_selections: selection.yakitoriSelections?.map((skewer) => ({
-            flavorName: skewer.flavorName,
-            typeName: skewer.typeName,
-          })) ?? null,
-          options_snapshot: selection.options.length > 0 ? selection.options.map((option) => ({
-            id: option.id,
-            groupId: option.groupId,
-            groupName: selection.menuItem.optionGroups.find((group) => group.id === option.groupId)?.name ?? "選択肢",
-            name: option.name,
-            priceDelta: option.priceDelta,
-          })) : null,
-        })),
-      ];
-    });
-    const { error: insertItemsError } = await supabase.from("order_items").insert(expandedItems);
-
-    if (insertItemsError) throw insertItemsError;
+    await insertOrderItems(orderId, items);
 
     removePendingOrder(orderId);
     return fromRows(insertedOrder as OrderRow, await fetchItemsForOrder(orderId));

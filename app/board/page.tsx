@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabase";
 // 来場者が見て触れる公開画面なので表示専用にする。お渡し完了の操作は調理ディスプレイ(要ログイン)で行う。
 export default function BoardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [hasJapaneseVoice, setHasJapaneseVoice] = useState(false);
@@ -24,8 +26,12 @@ export default function BoardPage() {
         hasLoadedOrdersRef.current = true;
       }
       setOrders(data);
-    } catch {
-      // silent
+      setLastUpdatedAt(Date.now());
+      setLoadFailed(false);
+    } catch (error) {
+      // 古い番号を出し続けていることに気づけるよう、黙らずに画面へ出す。
+      console.error("呼び出し番号の取得に失敗しました", error);
+      setLoadFailed(true);
     }
   }, []);
 
@@ -139,7 +145,17 @@ export default function BoardPage() {
           {!audioEnabled && <p className="mt-2 text-xs font-bold text-brand-vermilion">音を有効にするまで通知音は鳴りません</p>}
         </header>
 
-        {readyOrders.length === 0 && waitingOrders.length === 0 && (
+        {loadFailed && (
+          <div className="relative z-10 rounded-2xl border-2 border-brand-vermilion bg-brand-vermilion/10 px-4 py-3 text-center">
+            <p className="text-sm font-black text-brand-vermilion">
+              ⚠ 表示を更新できていません
+              {lastUpdatedAt ? `（最終更新 ${new Date(lastUpdatedAt).toLocaleTimeString("ja-JP")}）` : ""}
+            </p>
+            <p className="mt-1 text-xs text-sub">番号が古い可能性があります。お呼び出しは口頭でも行います。</p>
+          </div>
+        )}
+
+        {lastUpdatedAt !== null && readyOrders.length === 0 && waitingOrders.length === 0 && (
           <div className="relative z-10 flex min-h-[70vh] flex-col items-center justify-center rounded-[28px] border border-line bg-canvas text-sub">
             <p className="text-6xl">🎪</p>
             <p className="mt-4 text-xl font-bold">注文が入ると表示されます</p>

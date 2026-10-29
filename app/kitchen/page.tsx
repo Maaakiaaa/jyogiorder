@@ -20,6 +20,9 @@ function KitchenContent() {
   const [now, setNow] = useState(() => Date.now());
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
+  const [isHandedOpen, setIsHandedOpen] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const notificationAudioRef = useRef<HTMLAudioElement | null>(null);
   const previousOrderIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedOrdersRef = useRef(false);
@@ -37,8 +40,12 @@ function KitchenContent() {
       setHandedOrders(handed);
       if (menuItems) setMenu(menuItems);
       setYakitoriTypes(types);
-    } catch {
-      // silent
+      setLastUpdatedAt(Date.now());
+      setLoadError(null);
+    } catch (error) {
+      // 黙って古い一覧を出し続けると「新しい注文が来ていない」ように見えるので、必ず画面に出す。
+      console.error("注文一覧の取得に失敗しました", error);
+      setLoadError(error instanceof Error ? error.message : "通信エラー");
     } finally {
       setLoading(false);
     }
@@ -189,6 +196,17 @@ function KitchenContent() {
 
         {!audioEnabled && <p className="mb-3 rounded-xl border border-brand-vermilion/40 bg-brand-vermilion/10 px-3 py-2 text-xs font-bold text-brand-vermilion">音を有効にするまで新規注文の通知音は鳴りません</p>}
 
+        {loadError && (
+          <div className="mb-3 rounded-xl border-2 border-brand-vermilion bg-brand-vermilion/10 px-4 py-3">
+            <p className="text-sm font-black text-brand-vermilion">
+              ⚠ 注文一覧を更新できていません（
+              {lastUpdatedAt ? `最終更新 ${new Date(lastUpdatedAt).toLocaleTimeString("ja-JP")}` : "まだ一度も取得できていません"}
+              ）
+            </p>
+            <p className="mt-1 text-xs text-sub">表示が古い可能性があります。通信を確認してください。自動で再試行しています。新しい注文は受付端末の画面でも確認できます。</p>
+          </div>
+        )}
+
         <p className="mb-3 text-sm text-slate-500">対応中の注文 {kitchenOrders.length} 件</p>
 
         <section className="mb-5 rounded-2xl border-2 border-brand-vermilion/30 bg-brand-vermilion/5 p-4">
@@ -266,7 +284,7 @@ function KitchenContent() {
 
         {loading && <div className="py-16 text-center text-slate-400">読み込み中...</div>}
 
-        {!loading && kitchenOrders.length === 0 && (
+        {!loading && lastUpdatedAt !== null && kitchenOrders.length === 0 && (
           <div className="py-16 text-center text-slate-400">
             <p className="text-4xl">🍳</p>
             <p className="mt-2">作る注文はまだありません</p>
@@ -322,8 +340,16 @@ function KitchenContent() {
 
         {handedOrders.length > 0 && (
           <div className="mt-6">
-            <p className="mb-3 text-sm font-bold text-slate-500">最近お渡し済み（誤タップの場合はここから戻せます）</p>
-            <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setIsHandedOpen((open) => !open)}
+              className="mb-3 flex w-full items-center justify-between gap-3 text-left"
+              aria-expanded={isHandedOpen}
+            >
+              <span className="text-sm font-bold text-slate-500">最近お渡し済み {handedOrders.length} 件（誤タップの場合はここから戻せます）</span>
+              <span className="text-base text-brand-indigo">{isHandedOpen ? "▲" : "▼"}</span>
+            </button>
+            {isHandedOpen && <div className="space-y-2">
               {handedOrders.map((order) => (
                 <div key={order.id} className="flex items-center justify-between rounded-xl border border-line bg-slate-50 px-4 py-3">
                   <p className="text-base font-black text-ink">番号 {order.number}</p>
@@ -336,7 +362,7 @@ function KitchenContent() {
                   </button>
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
         )}
 
