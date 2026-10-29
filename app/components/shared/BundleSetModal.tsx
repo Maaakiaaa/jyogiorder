@@ -128,7 +128,7 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-[28px] border border-line bg-surface p-5 sm:rounded-[28px]">
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-sub">セット内容を選ぶ</p>
         <h2 className="mt-1 text-xl font-black text-ink">{menuItem.name}</h2>
-        <p className="mt-1 text-sm text-sub">セット価格 ¥{menuItem.price.toLocaleString()}（中身の価格差は加算されません）</p>
+        <p className="mt-1 text-sm text-sub">セット価格 ¥{menuItem.price.toLocaleString()}</p>
         <p className="mt-2 text-xs font-bold text-brand-indigo">{activeSlotIndex + 1} / {menuItem.bundleSlots.length}</p>
         {!hasDrinkSlot && (
           <p className="mt-3 rounded-xl border border-brand-vermilion/40 bg-brand-vermilion/10 px-3 py-2 text-sm font-bold text-brand-vermilion">
@@ -157,9 +157,9 @@ export default function BundleSetModal({ menuItem, flavors, types, onConfirm, on
                         }`}
                       >
                         <span className="block">{item.name}</span>
-                        <span className="mt-1 block text-xs font-medium">
-                          {unavailable(item, types) ? "売り切れ" : item.name === "けろこラテ" ? "ホットのみ" : `単品 ¥${item.price.toLocaleString()}`}
-                        </span>
+                        {unavailable(item, types) && (
+                          <span className="mt-1 block text-xs font-medium">売り切れ</span>
+                        )}
                       </button>
                     ))}
                   </div>
