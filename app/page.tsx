@@ -34,6 +34,7 @@ export default function Home() {
   const cartTotal = cart.reduce((sum, item) => (
     sum + (item.menuItem.price + (item.options ?? []).reduce((optionSum, option) => optionSum + option.priceDelta, 0)) * item.qty
   ), 0);
+  const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
   // リロード対策: 支払い確定済み(まだ受け渡し済みでない)の注文IDだけをlocalStorageに
   // 退避しておき、再訪時にDBの最新状態で復元する。カート・QR提示中の状態はここでは
@@ -362,6 +363,18 @@ export default function Home() {
           )}
         </section>
 
+        {activeTab === "menu" && cartCount > 0 && (
+          <div className="border-t border-line bg-surface px-4 pt-3">
+            <button
+              onClick={() => setActiveTab("cart")}
+              className="neon-button flex h-14 w-full items-center justify-between rounded-full px-5 text-sm font-black transition-all"
+            >
+              <span>🛒 {cartCount}点　¥{cartTotal.toLocaleString()}</span>
+              <span>注文を確認する →</span>
+            </button>
+          </div>
+        )}
+
         <nav className="grid grid-cols-3 gap-2 border-t border-line bg-surface px-3 py-4">
           <button
             onClick={() => setActiveTab("menu")}
@@ -377,7 +390,7 @@ export default function Home() {
               activeTab === "cart" ? "neon-pill bg-brand-gold/10 text-brand-gold" : "text-sub"
             }`}
           >
-            🛒 CART
+            🛒 注文確認
           </button>
           <button
             onClick={() => {
