@@ -1,12 +1,36 @@
 import { BundleSelection, BundleSlot, MenuItem, MenuOption, MenuOptionGroup, OrderItemOptionSnapshot, YakitoriFlavor, YakitoriType } from "@/types";
 import { supabase } from "./supabase";
 
-export const MENU_ITEMS: MenuItem[] = [
-  { id: 1, code: 1, categoryId: 1, categoryName: "通常メニュー", name: "焼き鳥", price: 200, emoji: "🐔", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
-  { id: 2, code: 2, categoryId: 1, name: "かき氷", price: 250, emoji: "🍧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
-  { id: 3, code: 3, categoryId: 1, name: "コーラ", price: 150, emoji: "🥤", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
-  { id: 4, code: 4, categoryId: 1, name: "水", price: 100, emoji: "💧", isAvailable: true, isActive: true, isYakitoriSet: false, yakitoriSkewerCount: null, optionGroups: [], isSet: false, bundleSlots: [] },
-];
+const MENU_CACHE_KEY = "jyogi:menu-cache";
+
+export type MenuCache = {
+  items: MenuItem[];
+  flavors: YakitoriFlavor[];
+  types: YakitoriType[];
+  savedAt: string;
+};
+
+// 会場のWi-Fiが不安定でもお客さん画面のメニューが出るよう、最後に取得できたメニューを
+// 端末に残しておく。売り切れは古い可能性があるが、最後の砦はレジ側の判定。
+export function saveMenuCache(cache: MenuCache): void {
+  try {
+    localStorage.setItem(MENU_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // 容量不足・プライベートブラウズ等。キャッシュは補助なので保存できなくても動作は続ける。
+  }
+}
+
+export function loadMenuCache(): MenuCache | null {
+  try {
+    const raw = localStorage.getItem(MENU_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<MenuCache>;
+    if (!Array.isArray(parsed.items) || !Array.isArray(parsed.flavors) || !Array.isArray(parsed.types) || typeof parsed.savedAt !== "string") return null;
+    return parsed as MenuCache;
+  } catch {
+    return null;
+  }
+}
 
 type MenuItemRow = {
   id: number;
@@ -189,33 +213,27 @@ function attachBundleSlots(items: MenuItem[], rows: BundleSlotRow[]): MenuItem[]
   }));
 }
 
-// お客さん画面・レジ画面用: 廃止(is_active=false)された品目は返さない
+// お客さん画面・レジ画面用: 廃止(is_active=false)された品目は返さない。
+// 取得失敗を空配列で返すと「メニューが0件」と区別できないため、失敗はそのまま投げる。
 export async function fetchMenuItems(): Promise<MenuItem[]> {
-  try {
-    const { data, error } = await supabase
-      .from("menu_items")
-      .select("*")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true });
+  const { data, error } = await supabase
+    .from("menu_items")
+    .select("*")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
 
-    if (error) {
-      console.error("Menu fetch error:", error.message, error.details, error.hint, error.code);
-      return MENU_ITEMS;
-    }
+  if (error) throw error;
 
-    const [{ data: categories, error: categoriesError }, optionRows] = await Promise.all([
-      supabase.from("categories").select("id, name"),
-      fetchOptionRows(true),
-    ]);
-    if (categoriesError) throw categoriesError;
-    const categoryNames = new Map((categories ?? []).map((category) => [category.id as number, category.name as string]));
-    return attachBundleSlots(
-      attachOptionGroups((data ?? []).map((row) => fromRow(row, categoryNames)), optionRows.groups, optionRows.options),
-      optionRows.bundleSlots
-    );
-  } catch {
-    return MENU_ITEMS;
-  }
+  const [{ data: categories, error: categoriesError }, optionRows] = await Promise.all([
+    supabase.from("categories").select("id, name"),
+    fetchOptionRows(true),
+  ]);
+  if (categoriesError) throw categoriesError;
+  const categoryNames = new Map((categories ?? []).map((category) => [category.id as number, category.name as string]));
+  return attachBundleSlots(
+    attachOptionGroups((data ?? []).map((row) => fromRow(row, categoryNames)), optionRows.groups, optionRows.options),
+    optionRows.bundleSlots
+  );
 }
 
 // 管理画面用: 廃止済みも含めて全件返す
@@ -306,6 +324,49 @@ export function resolveBundleSelections(
 
   if (selectedSlotIds.size !== setItem.bundleSlots.length) return null;
   return resolved.sort((a, b) => a.slotId - b.slotId);
+}
+
+export type LineAvailabilityCheck = {
+  menuItemId: number;
+  optionIds: number[];
+  yakitoriTypeIds?: number[];
+  bundleSelections?: { slotId: number; menuItemId: number; optionIds: number[]; yakitoriTypeIds?: number[] }[];
+};
+
+// カートやQRの中身は追加時点の商品情報なので、最新のメニューと突き合わせて
+// 売り切れ・廃止になった品目／選択肢／串の種類が含まれていないかを判定する。
+export function isLineSoldOut(menu: MenuItem[], yakitoriTypes: YakitoriType[], line: LineAvailabilityCheck): boolean {
+  const typesSoldOut = (typeIds: number[] | undefined) => (typeIds ?? []).some(
+    (typeId) => !yakitoriTypes.find((type) => type.id === typeId)?.isAvailable
+  );
+  const itemSoldOut = (item: MenuItem | undefined, optionIds: number[], typeIds: number[] | undefined) => {
+    if (!item || !item.isActive || !item.isAvailable) return true;
+    const options = item.optionGroups.flatMap((group) => group.options);
+    return optionIds.some((optionId) => {
+      const option = options.find((candidate) => candidate.id === optionId);
+      return !option || !option.isActive || !option.isAvailable;
+    }) || typesSoldOut(typeIds);
+  };
+
+  const item = menu.find((candidate) => candidate.id === line.menuItemId);
+  return itemSoldOut(item, line.optionIds, line.yakitoriTypeIds) || (line.bundleSelections ?? []).some((selection) => itemSoldOut(
+    item?.bundleSlots.find((slot) => slot.id === selection.slotId)?.candidateItems.find((candidate) => candidate.id === selection.menuItemId),
+    selection.optionIds,
+    selection.yakitoriTypeIds
+  ));
+}
+
+// 売り切れ判定を別途行うために、在庫状態を無視して品目・選択肢を解決したいとき用。
+export function ignoringAvailability(item: MenuItem): MenuItem {
+  return {
+    ...item,
+    isAvailable: true,
+    optionGroups: item.optionGroups.map((group) => ({
+      ...group,
+      options: group.options.map((option) => ({ ...option, isAvailable: true })),
+    })),
+    bundleSlots: item.bundleSlots.map((slot) => ({ ...slot, candidateItems: slot.candidateItems.map(ignoringAvailability) })),
+  };
 }
 
 export function optionUnitPrice(menuItem: MenuItem, options: MenuOption[]): number {

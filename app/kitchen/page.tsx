@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MenuItem, Order, OrderStatus, YakitoriType } from "@/types";
-import { fetchActiveOrders, fetchRecentCancelledOrders, updateOrderStatus } from "@/lib/orders";
+import { fetchActiveOrders, fetchRecentCancelledOrders, fetchRecentHandedOrders, updateOrderStatus } from "@/lib/orders";
 import { fetchMenuItems, fetchYakitoriTypes, setItemAvailable, setOptionAvailable, setYakitoriTypeAvailable } from "@/lib/menu";
 import { createNotificationAudio, playNotificationAudio, unlockNotificationAudio } from "@/lib/notificationSound";
 import { supabase } from "@/lib/supabase";
@@ -12,6 +12,7 @@ import RoleGate from "@/app/components/auth/RoleGate";
 function KitchenContent() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [cancelledOrders, setCancelledOrders] = useState<Order[]>([]);
+  const [handedOrders, setHandedOrders] = useState<Order[]>([]);
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,14 +26,16 @@ function KitchenContent() {
 
   const load = useCallback(async () => {
     try {
-      const [active, cancelled, menuItems, types] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders(), fetchMenuItems(), fetchYakitoriTypes()]);
+      // メニュー(売り切れ切替用)の取得失敗で注文一覧の更新まで止めないよう、メニューだけ失敗を個別に吸収して前回の表示を保つ。
+      const [active, cancelled, handed, menuItems, types] = await Promise.all([fetchActiveOrders(), fetchRecentCancelledOrders(), fetchRecentHandedOrders(), fetchMenuItems().catch(() => null), fetchYakitoriTypes()]);
       if (!hasLoadedOrdersRef.current) {
         previousOrderIdsRef.current = new Set(active.map((order) => order.id));
         hasLoadedOrdersRef.current = true;
       }
       setOrders(active);
       setCancelledOrders(cancelled);
-      setMenu(menuItems);
+      setHandedOrders(handed);
+      if (menuItems) setMenu(menuItems);
       setYakitoriTypes(types);
     } catch {
       // silent
@@ -93,6 +96,8 @@ function KitchenContent() {
     try {
       await updateOrderStatus(id, status);
       await load();
+    } catch (error) {
+      alert(`状態の更新に失敗しました: ${error instanceof Error ? error.message : "権限または通信エラー"}`);
     } finally {
       setUpdating(null);
     }
@@ -160,6 +165,7 @@ function KitchenContent() {
   }
 
   const kitchenOrders = orders.filter((o) => o.status === "received" || o.status === "cooking");
+  const readyOrders = orders.filter((o) => o.status === "ready");
 
   return (
     <main className="min-h-screen bg-slate-100 px-3 py-3">
@@ -280,6 +286,59 @@ function KitchenContent() {
             />
           ))}
         </div>
+
+        {/* お渡しは呼び出しボード(来場者が触れる公開画面)ではなく、ログイン必須のこの画面で行う。 */}
+        {readyOrders.length > 0 && (
+          <div className="mt-6 rounded-2xl border-2 border-emerald-400 bg-emerald-50 p-4">
+            <p className="mb-3 text-base font-black text-emerald-800">お渡し待ち（呼び出し中） {readyOrders.length} 件</p>
+            <div className="space-y-2">
+              {readyOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-300 bg-white px-4 py-3">
+                  <div>
+                    <p className="text-xl font-black text-ink">番号 {order.number}</p>
+                    <p className="text-sm text-[#AF011C]">{order.items.map((i) => `${i.name} x ${i.qty}`).join("、")}</p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      disabled={updating === order.id}
+                      onClick={() => void transition(order.id, "cooking")}
+                      className="rounded-lg border border-line bg-white px-3 py-2 text-xs font-bold text-sub disabled:opacity-40"
+                    >
+                      {updating === order.id ? "..." : "調理中に戻す"}
+                    </button>
+                    <button
+                      disabled={updating === order.id}
+                      onClick={() => void transition(order.id, "handed")}
+                      className="rounded-lg border-2 border-emerald-500 bg-emerald-500 px-4 py-2 text-sm font-black text-white disabled:opacity-40"
+                    >
+                      {updating === order.id ? "..." : "お渡し完了"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {handedOrders.length > 0 && (
+          <div className="mt-6">
+            <p className="mb-3 text-sm font-bold text-slate-500">最近お渡し済み（誤タップの場合はここから戻せます）</p>
+            <div className="space-y-2">
+              {handedOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between rounded-xl border border-line bg-slate-50 px-4 py-3">
+                  <p className="text-base font-black text-ink">番号 {order.number}</p>
+                  <button
+                    disabled={updating === order.id}
+                    onClick={() => void transition(order.id, "ready")}
+                    className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-bold text-brand-indigo disabled:opacity-40"
+                  >
+                    {updating === order.id ? "..." : "お渡し待ちに戻す"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {cancelledOrders.length > 0 && (
           <div className="mt-6">

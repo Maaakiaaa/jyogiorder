@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CartPanel from "@/app/components/customer/CartPanel";
 import CheckoutPanel from "@/app/components/customer/CheckoutPanel";
 import MenuPanel from "@/app/components/customer/MenuPanel";
 import WaitingPanel from "@/app/components/customer/WaitingPanel";
 import WelcomePanel from "@/app/components/customer/WelcomePanel";
-import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes } from "@/lib/menu";
+import { fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, isLineSoldOut, loadMenuCache, saveMenuCache } from "@/lib/menu";
 import { fetchOrder } from "@/lib/orders";
 import { createOrderId } from "@/lib/qr";
 import { supabase } from "@/lib/supabase";
@@ -17,6 +17,10 @@ type CustomerStep = "menu" | "checkout" | "waiting" | "welcome";
 type TabType = "menu" | "cart";
 
 const WAITING_TIMEOUT_MS = 10000;
+const MENU_RETRY_MS = 15000;
+
+// live: 最新を取得済み / stale: 取得に失敗し前回のキャッシュを表示中 / error: 表示できるメニューがない
+type MenuStatus = "loading" | "live" | "stale" | "error";
 
 export default function Home() {
   const [step, setStep] = useState<CustomerStep>("menu");
@@ -30,11 +34,31 @@ export default function Home() {
   const [yakitoriFlavors, setYakitoriFlavors] = useState<YakitoriFlavor[]>([]);
   const [yakitoriTypes, setYakitoriTypes] = useState<YakitoriType[]>([]);
   const [sessionRestored, setSessionRestored] = useState(false);
+  const [menuStatus, setMenuStatus] = useState<MenuStatus>("loading");
+  const reloadMenuRef = useRef<(() => void) | null>(null);
 
   const cartTotal = cart.reduce((sum, item) => (
     sum + (item.menuItem.price + (item.options ?? []).reduce((optionSum, option) => optionSum + option.priceDelta, 0)) * item.qty
   ), 0);
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
+
+  // カートの品目は追加時点の情報なので、最新のメニューで売り切れになっていないか毎回確認する。
+  // メニュー取得に失敗して空のときは判定できないため、全部を売り切れ扱いにはしない。
+  function isCartItemSoldOut(item: CartItem): boolean {
+    if (menu.length === 0) return false;
+    return isLineSoldOut(menu, yakitoriTypes, {
+      menuItemId: item.menuItem.id,
+      optionIds: (item.options ?? []).map((option) => option.id),
+      yakitoriTypeIds: item.yakitoriSelections?.map((selection) => selection.typeId),
+      bundleSelections: item.bundleSelections?.map((selection) => ({
+        slotId: selection.slotId,
+        menuItemId: selection.menuItem.id,
+        optionIds: selection.options.map((option) => option.id),
+        yakitoriTypeIds: selection.yakitoriSelections?.map((skewer) => skewer.typeId),
+      })),
+    });
+  }
+  const hasSoldOutInCart = cart.some(isCartItemSoldOut);
 
   // リロード対策: 支払い確定済み(まだ受け渡し済みでない)の注文IDだけをlocalStorageに
   // 退避しておき、再訪時にDBの最新状態で復元する。カート・QR提示中の状態はここでは
@@ -79,25 +103,54 @@ export default function Home() {
     saveCustomerSession(orders.map((order) => order.id), activeOrderId);
   }, [sessionRestored, orders, activeOrderId]);
 
+  // メニューは原則2(重いものはオフライン)に従い端末にキャッシュする。開いた瞬間はキャッシュを出し、
+  // 最新が取れたら差し替える。取れない間は「前回のメニュー」である旨を表示し、定期的に取り直す。
   useEffect(() => {
     let cancelled = false;
+    let hasMenu = false;
+    let isLive = false;
 
     async function loadMenu() {
+      const cached = hasMenu ? null : loadMenuCache();
+      if (cached && !cancelled) {
+        setMenu(cached.items);
+        setYakitoriFlavors(cached.flavors);
+        setYakitoriTypes(cached.types);
+        hasMenu = true;
+      }
+
       try {
         const [items, flavors, types] = await Promise.all([
           fetchMenuItems(),
           fetchYakitoriFlavors(),
           fetchYakitoriTypes(),
         ]);
-        if (!cancelled) {
-          setMenu(items);
-          setYakitoriFlavors(flavors);
-          setYakitoriTypes(types);
-        }
-      } catch {
-        // silent
+        if (cancelled) return;
+        setMenu(items);
+        setYakitoriFlavors(flavors);
+        setYakitoriTypes(types);
+        hasMenu = true;
+        isLive = true;
+        setMenuStatus("live");
+        saveMenuCache({ items, flavors, types, savedAt: new Date().toISOString() });
+      } catch (error) {
+        console.error("メニューの取得に失敗しました", error);
+        if (cancelled) return;
+        isLive = false;
+        setMenuStatus(hasMenu ? "stale" : "error");
       }
     }
+
+    reloadMenuRef.current = () => void loadMenu();
+    const handleOnline = () => void loadMenu();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void loadMenu();
+    };
+    const retry = setInterval(() => {
+      if (!isLive) void loadMenu();
+    }, MENU_RETRY_MS);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     void loadMenu();
     const channel = supabase
@@ -111,6 +164,10 @@ export default function Home() {
 
     return () => {
       cancelled = true;
+      reloadMenuRef.current = null;
+      clearInterval(retry);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -252,8 +309,12 @@ export default function Home() {
     setCart((prev) => prev.filter((item) => item.lineId !== lineId));
   }
 
+  function removeLineFromCart(target: CartItem) {
+    setCart((prev) => prev.filter((item) => item !== target));
+  }
+
   function handleShowQr() {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || hasSoldOutInCart) return;
     setPendingOrderId(createOrderId());
     setWaitingTimedOut(false);
     setStep("checkout");
@@ -334,9 +395,31 @@ export default function Home() {
         </header>
 
         <section className="px-4 pt-4">
-          <div className="rounded-2xl border border-line bg-canvas p-4">
-            <p className="text-sm text-sub">商品を選んでカートへ追加してください。</p>
-          </div>
+          {menuStatus === "error" ? (
+            <div className="rounded-2xl border border-brand-vermilion/40 bg-brand-vermilion/10 p-4">
+              <p className="text-sm font-bold text-brand-vermilion">メニューを読み込めませんでした。</p>
+              <p className="mt-1 text-xs text-sub">通信が不安定なようです。自動で再試行しています。レジでの直接注文もできます。</p>
+              <button
+                onClick={() => reloadMenuRef.current?.()}
+                className="mt-3 rounded-full border border-brand-vermilion/40 bg-surface px-4 py-2 text-xs font-bold text-brand-vermilion"
+              >
+                もう一度読み込む
+              </button>
+            </div>
+          ) : menuStatus === "stale" ? (
+            <div className="rounded-2xl border border-brand-gold/40 bg-brand-gold/10 p-4">
+              <p className="text-sm font-bold text-brand-gold">通信が不安定なため、前回読み込んだメニューを表示しています。</p>
+              <p className="mt-1 text-xs text-sub">売り切れが反映されていない場合があります。最終的にはレジで確認します。</p>
+            </div>
+          ) : menuStatus === "loading" && menu.length === 0 ? (
+            <div className="rounded-2xl border border-line bg-canvas p-4">
+              <p className="text-sm text-sub">メニューを読み込み中…</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-line bg-canvas p-4">
+              <p className="text-sm text-sub">商品を選んでカートへ追加してください。</p>
+            </div>
+          )}
         </section>
 
         <section className="animate-slide-up flex-1 overflow-y-auto px-2 py-3">
@@ -358,6 +441,8 @@ export default function Home() {
               onChangeQty={changeQty}
               onChangeLineQty={changeLineQty}
               onRemoveYakitoriSet={removeYakitoriSetFromCart}
+              onRemoveLine={removeLineFromCart}
+              isSoldOut={isCartItemSoldOut}
               onShowQr={handleShowQr}
             />
           )}
@@ -370,7 +455,7 @@ export default function Home() {
               className="neon-button flex h-14 w-full items-center justify-between rounded-full px-5 text-sm font-black transition-all"
             >
               <span>🛒 {cartCount}点　¥{cartTotal.toLocaleString()}</span>
-              <span>注文を確認する →</span>
+              <span>{hasSoldOutInCart ? "⚠ 売り切れあり →" : "注文を確認する →"}</span>
             </button>
           </div>
         )}
@@ -400,11 +485,15 @@ export default function Home() {
               }
               setStep("waiting");
             }}
+            disabled={orders.length === 0}
             className={`rounded-xl px-2 py-[1.3rem] text-xs font-bold transition ${
-              orders.length > 0 ? "bg-brand-indigo/10 text-brand-indigo" : "text-line"
+              orders.length > 0 ? "bg-brand-indigo/10 text-brand-indigo" : "text-sub"
             }`}
           >
-            📦 MY ORDERS {orders.length > 0 ? `(${orders.length})` : ""}
+            📦 自分の注文 {orders.length > 0 ? `(${orders.length})` : ""}
+            {orders.length === 0 && (
+              <span className="mt-1 block text-[10px] font-normal">会計後に表示されます</span>
+            )}
           </button>
         </nav>
       </div>

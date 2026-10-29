@@ -74,6 +74,16 @@ export function recordPendingOrderFailure(orderId: string, error: unknown): Pend
   return updated;
 }
 
+// 番号の重複が判明して振り直したとき用。キューに残る番号も新しい番号に揃える。
+export function updatePendingOrderNumber(orderId: string, seq: number, number: string): void {
+  const queue = readQueue();
+  const index = queue.findIndex((order) => order.orderId === orderId);
+  if (index < 0) return;
+  queue[index] = { ...queue[index], seq, number };
+  writeQueue(queue);
+  notifyQueueChanged("remove");
+}
+
 export function getPendingOrder(orderId: string): PendingOrder | null {
   return readQueue().find((o) => o.orderId === orderId) ?? null;
 }

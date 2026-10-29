@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { issueNextNumber } from "./numbering";
+import { ensureSeqAtLeast, issueNextNumber, recordRenumberNotice } from "./numbering";
 import {
   enqueuePendingOrder,
   getPendingOrder,
@@ -7,11 +7,13 @@ import {
   pendingOrderToOrder,
   recordPendingOrderFailure,
   removePendingOrder,
+  updatePendingOrderNumber,
 } from "./offlineQueue";
 import { BundleSelection, Order, OrderItem, OrderItemOptionSnapshot, OrderItemYakitoriSelection, OrderPrefix, OrderStatus } from "@/types";
 import { displayMenuItemName } from "./menu";
 
 export const AUTH_REQUIRED_MESSAGE = "認証エラーです。再ログインしてください";
+const MAX_RENUMBER_ATTEMPTS = 5;
 
 export function isAuthError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -144,7 +146,7 @@ export async function placeOrder(
   }
 
   const total = pending?.total ?? orderTotalFromNewItems(items);
-  const { seq, number } = pending ?? issueNextNumber(prefix);
+  let { seq, number } = pending ?? issueNextNumber(prefix);
   const createdAt = pending?.createdAt ?? new Date().toISOString();
 
   if (!pending) {
@@ -161,23 +163,45 @@ export async function placeOrder(
     }, true, false);
   }
 
-  try {
-    const { data: insertedOrder, error: insertOrderError } = await supabase
-      .from("orders")
-      .insert({ id: orderId, prefix, seq, number, total, status: "received" })
-      .select()
-      .single();
+  const originalNumber = number;
 
-    if (insertOrderError) {
-      if (insertOrderError.code === "23505") {
-        // unique制約違反(orders.id 重複) = 別経路で既に登録済み。既存注文を返す。
-        const raced = await findExistingOrder(orderId).catch(() => null);
-        if (raced) {
-          removePendingOrder(orderId);
-          return raced;
-        }
+  try {
+    let insertedOrder: OrderRow | null = null;
+    for (let attempt = 0; insertedOrder === null; attempt++) {
+      const { data, error: insertOrderError } = await supabase
+        .from("orders")
+        .insert({ id: orderId, prefix, seq, number, total, status: "received" })
+        .select()
+        .single();
+
+      if (!insertOrderError) {
+        insertedOrder = data as OrderRow;
+        break;
       }
-      throw insertOrderError;
+      if (insertOrderError.code !== "23505") throw insertOrderError;
+
+      // unique制約違反には2種類ある。orders.id の重複 = 別経路で既に登録済みなので既存注文を返す。
+      const raced = await findExistingOrder(orderId);
+      if (raced) {
+        removePendingOrder(orderId);
+        return raced;
+      }
+
+      // (prefix, seq) の重複 = 端末の採番位置が巻き戻った(端末交換・ストレージ消去)か、
+      // 同じ記号の端末が2台ある。通信失敗として再送し続けても永遠に通らないので、
+      // DB上の最大番号まで採番位置を進めてから番号を振り直す。
+      if (attempt >= MAX_RENUMBER_ATTEMPTS) {
+        throw new Error(`番号 ${number} が既に使われており、振り直しにも失敗しました。同じ記号の端末が複数ないか確認してください`);
+      }
+      await syncNumberingWithServer(prefix);
+      ({ seq, number } = issueNextNumber(prefix));
+      updatePendingOrderNumber(orderId, seq, number);
+    }
+
+    // 前回の呼び出しで既に番号を返している(=お客様に伝わっている)場合だけ、訂正が必要と知らせる。
+    // 初回の会計中に振り直した場合は、画面に出る番号が最初から新しい番号なので訂正は不要。
+    if (pending && number !== originalNumber) {
+      recordRenumberNotice({ orderId, prefix, from: originalNumber, to: number, at: new Date().toISOString() });
     }
 
     const expandedItems = items.flatMap((item, index) => {
@@ -232,6 +256,20 @@ export async function placeOrder(
       failed ?? { orderId, prefix, seq, number, items, total, createdAt, attempts: 1, lastError: "送信に失敗しました" }
     );
   }
+}
+
+// 端末の採番位置がDB上の最大番号より遅れていたら追いつかせる。採番そのものは引き続き端末で行い、
+// DBは「既に使われた番号」を知るための参照にだけ使う(オフラインならそのまま端末の値で採番を続ける)。
+export async function syncNumberingWithServer(prefix: OrderPrefix): Promise<void> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("seq")
+    .eq("prefix", prefix)
+    .order("seq", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) ensureSeqAtLeast(prefix, (data as { seq: number }).seq);
 }
 
 // オフラインキューに溜まった注文を再送する。オンライン復帰時・定期ポーリングから呼ぶ。
@@ -297,17 +335,25 @@ export async function fetchActiveOrders(): Promise<Order[]> {
   return attachPublicItems((data ?? []) as OrderRow[]);
 }
 
-// 誤タップでの取消から復帰できるよう、直近の取消済み注文を調理ディスプレイに出す用。
-export async function fetchRecentCancelledOrders(): Promise<Order[]> {
+// 誤タップでの取消・お渡し完了から復帰できるよう、直近の該当注文を調理ディスプレイに出す用。
+async function fetchRecentOrdersByStatus(status: OrderStatus, limit: number): Promise<Order[]> {
   const { data, error } = await supabase
     .from("orders")
     .select("*")
-    .eq("status", "cancelled")
+    .eq("status", status)
     .order("updated_at", { ascending: false })
-    .limit(20);
+    .limit(limit);
 
   if (error) throw error;
   return attachItems((data ?? []) as OrderRow[]);
+}
+
+export function fetchRecentCancelledOrders(): Promise<Order[]> {
+  return fetchRecentOrdersByStatus("cancelled", 20);
+}
+
+export function fetchRecentHandedOrders(): Promise<Order[]> {
+  return fetchRecentOrdersByStatus("handed", 5);
 }
 
 export async function fetchSalesOrders(): Promise<Order[]> {

@@ -6,6 +6,7 @@ import { AUTH_REQUIRED_MESSAGE, NewOrderItem, placeOrder, isAuthError } from "@/
 import { peekNextNumber } from "@/lib/numbering";
 import { createOrderId } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
+import RenumberAlert from "@/app/components/pos/RenumberAlert";
 import YakitoriSetModal from "@/app/components/shared/YakitoriSetModal";
 import MenuOptionsModal from "@/app/components/shared/MenuOptionsModal";
 import BundleSetModal from "@/app/components/shared/BundleSetModal";
@@ -36,7 +37,7 @@ function PosBContent() {
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [error, setError] = useState("");
   const [nextNumber, setNextNumber] = useState("-");
-  const { pendingCount: pendingSyncCount, lastError: pendingSyncError } = usePendingSync();
+  const { pendingCount: pendingSyncCount, lastError: pendingSyncError, renumberNotices, numberingSyncCount, numberingSyncError } = usePendingSync("B");
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +68,7 @@ function PosBContent() {
 
   useEffect(() => {
     setNextNumber(peekNextNumber("B"));
-  }, [confirmedOrder]);
+  }, [confirmedOrder, numberingSyncCount]);
 
   function isYakitoriTypeSoldout() {
     const activeTypes = yakitoriTypes.filter((type) => type.isActive);
@@ -208,12 +209,17 @@ function PosBContent() {
           <h1 className="neon-title mt-2 text-2xl text-ink">B端末（店頭）</h1>
           <p className="mt-2 text-sm text-sub">その場で品目を選び、会計と同時に番号を発行します。</p>
           <p className="mt-1 text-xs text-sub">次に発行される番号: {nextNumber}</p>
+          {numberingSyncError && (
+            <p className="mt-1 text-xs text-brand-gold">使用済み番号との照合ができていません（通信復帰時に再確認します）</p>
+          )}
           {pendingSyncCount > 0 && (
             <p className="mt-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 px-3 py-1.5 text-xs font-bold text-brand-gold">
               未送信{pendingSyncCount}件・最後のエラー: {pendingSyncError ?? "送信待ち"}
             </p>
           )}
         </header>
+
+        <RenumberAlert notices={renumberNotices} />
 
         {error && (
           <div className="mt-4 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-700">

@@ -1,12 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { displayMenuItemName, fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, findMenuItemByCode, optionSnapshots, optionUnitPrice, resolveBundleSelections, resolveMenuOptionsByCodes } from "@/lib/menu";
+import { displayMenuItemName, fetchMenuItems, fetchYakitoriFlavors, fetchYakitoriTypes, findMenuItemByCode, ignoringAvailability, isLineSoldOut, optionSnapshots, optionUnitPrice, resolveBundleSelections, resolveMenuOptionsByCodes } from "@/lib/menu";
 import { AUTH_REQUIRED_MESSAGE, NewOrderItem, placeOrder, isAuthError } from "@/lib/orders";
 import { peekNextNumber } from "@/lib/numbering";
 import { parseQrPayload } from "@/lib/qr";
 import { usePendingSync } from "@/app/components/pos/usePendingSync";
 import CameraQrScanner from "@/app/components/pos/CameraQrScanner";
+import RenumberAlert from "@/app/components/pos/RenumberAlert";
 import { BundleSelection, MenuItem, Order, OrderItemOptionSnapshot, OrderItemYakitoriSelection, QrOrderPayload, YakitoriFlavor, YakitoriType } from "@/types";
 import { supabase } from "@/lib/supabase";
 import RoleGate from "@/app/components/auth/RoleGate";
@@ -22,6 +23,7 @@ type ScannedLineItem = {
   yakitoriSelections?: OrderItemYakitoriSelection[];
   optionsSnapshot?: OrderItemOptionSnapshot[];
   bundleSelections?: BundleSelection[];
+  soldOut: boolean;
 };
 
 function PosAContent() {
@@ -37,7 +39,7 @@ function PosAContent() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
   const [nextNumber, setNextNumber] = useState("-");
-  const { pendingCount: pendingSyncCount, lastError: pendingSyncError } = usePendingSync();
+  const { pendingCount: pendingSyncCount, lastError: pendingSyncError, renumberNotices, numberingSyncCount, numberingSyncError } = usePendingSync("A");
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +74,7 @@ function PosAContent() {
 
   useEffect(() => {
     setNextNumber(peekNextNumber("A"));
-  }, [confirmedOrder]);
+  }, [confirmedOrder, numberingSyncCount]);
 
   const { scannedItems, hasMissingItems } = useMemo(() => {
     if (!qrPayload) return { scannedItems: [] as ScannedLineItem[], hasMissingItems: false };
@@ -80,9 +82,12 @@ function PosAContent() {
     const merged = new Map<string, ScannedLineItem>();
     const setLines: ScannedLineItem[] = [];
     let missing = false;
+    // 売り切れはQRの不正とは分けて扱う(売り切れ分だけ外して会計できるようにする)ため、
+    // 解決は在庫状態を無視して行い、売り切れかどうかは isLineSoldOut() で別に判定する。
+    const resolvableMenu = menu.map(ignoringAvailability);
 
     qrPayload.items.forEach((item, index) => {
-      const menuItem = findMenuItemByCode(menu, item.menuCode);
+      const menuItem = findMenuItemByCode(resolvableMenu, item.menuCode);
       if (!menuItem) {
         missing = true;
         return;
@@ -103,7 +108,7 @@ function PosAContent() {
         const yakitoriSelections = qrSelection?.yakitoriSelections?.map((skewer) => {
           const flavor = yakitoriFlavors.find((candidate) => candidate.id === skewer.flavorId);
           const type = yakitoriTypes.find((candidate) => candidate.id === skewer.typeId);
-          if (!flavor || !type || !type.isAvailable) {
+          if (!flavor || !type) {
             missing = true;
             return null;
           }
@@ -129,7 +134,19 @@ function PosAContent() {
       const validBundleSelections = resolvedBundleSelections.filter(
         (selection): selection is BundleSelection => selection !== null
       );
-      const lineKey = `${menuItem.code}:${resolvedOptions.map((option) => option.code).sort((a, b) => a - b).join(",")}:${validBundleSelections.map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}`).join(",")}`;
+      const soldOut = isLineSoldOut(menu, yakitoriTypes, {
+        menuItemId: menuItem.id,
+        optionIds: resolvedOptions.map((option) => option.id),
+        yakitoriTypeIds: item.yakitoriSelections?.map((selection) => selection.typeId),
+        bundleSelections: validBundleSelections.map((selection) => ({
+          slotId: selection.slotId,
+          menuItemId: selection.menuItem.id,
+          optionIds: selection.options.map((option) => option.id),
+          yakitoriTypeIds: selection.yakitoriSelections?.map((skewer) => skewer.typeId),
+        })),
+      });
+      // セット内の串の選択も行の区別に含める(含めないと選択の違うセットが1行にまとまってしまう)。
+      const lineKey = `${menuItem.code}:${resolvedOptions.map((option) => option.code).sort((a, b) => a - b).join(",")}:${validBundleSelections.map((selection) => `${selection.slotId}-${selection.menuItem.code}-${selection.options.map((option) => option.code).sort((a, b) => a - b).join(".")}-${(selection.yakitoriSelections ?? []).map((skewer) => `${skewer.flavorId}~${skewer.typeId}`).join(".")}`).join(",")}`;
 
       // ドリンクと焼き鳥セットは串の選択が異なりうるため、同じ商品IDでもqtyでまとめず1回の購入=1行として扱う。
       if (item.yakitoriSelections) {
@@ -137,7 +154,7 @@ function PosAContent() {
         for (const selection of item.yakitoriSelections) {
           const flavor = yakitoriFlavors.find((f) => f.id === selection.flavorId);
           const type = yakitoriTypes.find((t) => t.id === selection.typeId);
-          if (!flavor || !type || !type.isAvailable) {
+          if (!flavor || !type) {
             missing = true;
             return;
           }
@@ -153,6 +170,7 @@ function PosAContent() {
           yakitoriSelections: resolved,
           optionsSnapshot,
           bundleSelections: validBundleSelections,
+          soldOut,
         });
         return;
       }
@@ -165,6 +183,7 @@ function PosAContent() {
         qty: 0,
         optionsSnapshot,
         bundleSelections: validBundleSelections,
+        soldOut,
       };
 
       current.qty += item.qty;
@@ -174,9 +193,12 @@ function PosAContent() {
     return { scannedItems: [...Array.from(merged.values()), ...setLines], hasMissingItems: missing };
   }, [menu, qrPayload, yakitoriFlavors, yakitoriTypes]);
 
+  const orderableItems = useMemo(() => scannedItems.filter((item) => !item.soldOut), [scannedItems]);
+  const hasSoldOutItems = orderableItems.length < scannedItems.length;
+
   const total = useMemo(
-    () => scannedItems.reduce((sum, item) => sum + item.price * item.qty, 0),
-    [scannedItems]
+    () => orderableItems.reduce((sum, item) => sum + item.price * item.qty, 0),
+    [orderableItems]
   );
 
   function handleScanResult(rawValue: string) {
@@ -206,11 +228,11 @@ function PosAContent() {
   }
 
   async function handleConfirmPayment() {
-    if (!qrPayload || scannedItems.length === 0 || isSubmitting || hasMissingItems) return;
+    if (!qrPayload || orderableItems.length === 0 || isSubmitting || hasMissingItems) return;
 
     setIsSubmitting(true);
     try {
-      const items: NewOrderItem[] = scannedItems.map((item) => ({
+      const items: NewOrderItem[] = orderableItems.map((item) => ({
         menuItemId: item.menuId,
         name: item.name,
         price: item.price,
@@ -254,12 +276,17 @@ function PosAContent() {
             スキャンは内容の確認だけです。番号は支払い完了ボタンを押した瞬間に発行されます。
           </p>
           <p className="mt-1 text-xs text-sub">次に発行される番号: {nextNumber}</p>
+          {numberingSyncError && (
+            <p className="mt-1 text-xs text-brand-gold">使用済み番号との照合ができていません（通信復帰時に再確認します）</p>
+          )}
           {pendingSyncCount > 0 && (
             <p className="mt-2 rounded-lg border border-brand-gold/40 bg-brand-gold/10 px-3 py-1.5 text-xs font-bold text-brand-gold">
               未送信{pendingSyncCount}件・最後のエラー: {pendingSyncError ?? "送信待ち"}
             </p>
           )}
         </header>
+
+        <RenumberAlert notices={renumberNotices} />
 
         <section className="mt-4 rounded-2xl border border-line bg-canvas p-4">
           <div className="flex items-center justify-between gap-3">
@@ -366,8 +393,11 @@ function PosAContent() {
           {scannedItems.length > 0 ? (
             <div className="space-y-2">
               {scannedItems.map((item) => (
-                <div key={item.key} className="flex items-start justify-between text-sm text-ink">
+                <div key={item.key} className={`flex items-start justify-between text-sm ${item.soldOut ? "text-sub line-through" : "text-ink"}`}>
                   <span>
+                    {item.soldOut && (
+                      <span className="mr-1 inline-block rounded bg-brand-vermilion px-1.5 py-0.5 text-[10px] font-black text-white no-underline">売り切れ</span>
+                    )}
                     {item.name} x {item.qty}
                     {item.optionsSnapshot && item.optionsSnapshot.length > 0 && (
                       <span className="block text-xs font-bold text-brand-indigo">
@@ -403,12 +433,20 @@ function PosAContent() {
             </p>
           )}
 
+          {hasSoldOutItems && !hasMissingItems && (
+            <p className="mt-3 rounded-xl border border-brand-vermilion/40 bg-brand-vermilion/10 px-3 py-2 text-sm font-bold text-brand-vermilion">
+              {orderableItems.length > 0
+                ? "売り切れの商品が含まれています。お客様にお伝えし、残りの商品だけで会計してください（合計は売り切れ分を除いた金額です）。"
+                : "すべて売り切れのため会計できません。お客様にお伝えください。"}
+            </p>
+          )}
+
           <button
             onClick={handleConfirmPayment}
-            disabled={scannedItems.length === 0 || hasMissingItems || isSubmitting}
+            disabled={orderableItems.length === 0 || hasMissingItems || isSubmitting}
             className="neon-button mt-4 w-full rounded-2xl px-4 py-4 text-base font-black disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isSubmitting ? "発行中..." : "支払い完了・番号発行"}
+            {isSubmitting ? "発行中..." : hasSoldOutItems ? "売り切れを除いて支払い完了・番号発行" : "支払い完了・番号発行"}
           </button>
         </section>
       </div>

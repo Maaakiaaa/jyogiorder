@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Order } from "@/types";
-import { fetchActiveOrders, updateOrderStatus } from "@/lib/orders";
+import { fetchActiveOrders } from "@/lib/orders";
 import { createNotificationAudio, playNotificationAudio, unlockNotificationAudio } from "@/lib/notificationSound";
 import { supabase } from "@/lib/supabase";
 
+// 来場者が見て触れる公開画面なので表示専用にする。お渡し完了の操作は調理ディスプレイ(要ログイン)で行う。
 export default function BoardPage() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [updating, setUpdating] = useState<string | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [hasJapaneseVoice, setHasJapaneseVoice] = useState(false);
@@ -81,7 +81,7 @@ export default function BoardPage() {
   }, [audioEnabled, hasJapaneseVoice, orders, speechEnabled]);
 
   useEffect(() => {
-    load();
+    const initialLoad = window.setTimeout(() => void load(), 0);
 
     const channel = supabase
       .channel("board-orders")
@@ -95,21 +95,12 @@ export default function BoardPage() {
     const poll = setInterval(load, 5000);
 
     return () => {
+      window.clearTimeout(initialLoad);
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", onVisible);
       clearInterval(poll);
     };
   }, [load]);
-
-  async function handleHandOver(id: string) {
-    setUpdating(id);
-    try {
-      await updateOrderStatus(id, "handed");
-      await load();
-    } finally {
-      setUpdating(null);
-    }
-  }
 
   async function enableAudio() {
     setAudioEnabled(true);
@@ -160,17 +151,13 @@ export default function BoardPage() {
             <p className="text-center text-[25px] font-bold uppercase tracking-[0.3em] text-emerald-700">READY</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {readyOrders.map((order) => (
-                <button
+                <div
                   key={order.id}
-                  onClick={() => handleHandOver(order.id)}
-                  disabled={updating === order.id}
-                  className="flex aspect-[6/5] flex-col items-center justify-center gap-1 rounded-[18px] border-2 border-emerald-400 bg-white px-1 text-center disabled:opacity-50"
+                  className="flex aspect-[6/5] flex-col items-center justify-center gap-1 rounded-[18px] border-2 border-emerald-400 bg-white px-1 text-center"
                 >
                   <p className="text-[42px] font-black leading-none text-ink neon-title">{order.number}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">
-                    {updating === order.id ? "..." : "タップでお渡し完了"}
-                  </p>
-                </button>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700">お受け取りください</p>
+                </div>
               ))}
             </div>
           </section>
